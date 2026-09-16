@@ -17,6 +17,7 @@
 | api.health | GET /health | 页面挂载 |
 | api.register | POST /auth/register | 注册 |
 | api.login | POST /auth/login | 登录与注册后自动登录 |
+| api.currentUser | GET /auth/me | 登录或刷新会话后读取显示用户名与账号 |
 | api.refreshSession | POST /auth/refresh | 恢复会话或首次 401 |
 | api.logout | POST /auth/logout | 退出 |
 | api.listArchiveProjects | GET /projects?page=&page_size= | 登录后和会话恢复后 |

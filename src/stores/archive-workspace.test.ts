@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { ApiError, api } from '../services/api'
+import { ApiError, api, setApiTokens } from '../services/api'
 import type { ArchiveAuditPage, ArchiveDraft, ArchiveDetail, ArchivePage, ArchiveSummary, ProcessDocument } from '../types'
 import { useArchiveWorkspaceStore } from './archive-workspace'
 
@@ -12,6 +12,7 @@ vi.mock('../services/api', async (original) => {
       ...module.api,
       register: vi.fn(),
       login: vi.fn(),
+      currentUser: vi.fn(),
       refreshSession: vi.fn(),
       logout: vi.fn(),
       listArchiveProjects: vi.fn(),
@@ -107,18 +108,44 @@ describe('archive workspace store', () => {
     vi.mocked(api.login).mockResolvedValue({
       access_token: 'access-token', refresh_token: 'refresh-token', token_type: 'bearer', access_expires_in: 1800, refresh_expires_in: 604800,
     })
+    vi.mocked(api.currentUser).mockResolvedValue({
+      id: 'user-1', username: 'demo_user', name: '张三',
+      created_at: '2026-09-14T00:00:00Z', updated_at: '2026-09-14T00:00:00Z',
+    })
     vi.mocked(api.listArchiveProjects).mockResolvedValue({ items: [project], page: 1, page_size: 20, total: 1 })
     const store = useArchiveWorkspaceStore()
 
     await store.login({ username: 'Demo_User', password: 'safe-password-123' })
 
     expect(api.login).toHaveBeenCalledWith({ username: 'demo_user', password: 'safe-password-123' })
+    expect(api.currentUser).toHaveBeenCalledOnce()
     expect(store.isAuthenticated).toBe(true)
     expect(store.username).toBe('demo_user')
+    expect(store.userName).toBe('张三')
     expect(store.activeProjectId).toBe(project.id)
     expect(localStorage.getItem('archive-v1-access-token')).toBe('access-token')
   })
 
+  it('hydrates the display name from the current-user endpoint after session refresh', async () => {
+    setApiTokens({ access_token: 'expired-access-token', refresh_token: 'refresh-token' })
+    vi.mocked(api.refreshSession).mockResolvedValue({
+      access_token: 'renewed-access-token', token_type: 'bearer', access_expires_in: 1800,
+    })
+    vi.mocked(api.currentUser).mockResolvedValue({
+      id: 'user-1', username: '000001', name: '张三',
+      created_at: '2026-09-14T00:00:00Z', updated_at: '2026-09-14T00:00:00Z',
+    })
+    vi.mocked(api.listArchiveProjects).mockResolvedValue({ items: [project], page: 1, page_size: 20, total: 1 })
+    const store = useArchiveWorkspaceStore()
+
+    await store.restoreSession()
+
+    expect(api.refreshSession).toHaveBeenCalledOnce()
+    expect(api.currentUser).toHaveBeenCalledOnce()
+    expect(store.username).toBe('000001')
+    expect(store.userName).toBe('张三')
+    expect(localStorage.getItem('archive-v1-user-name')).toBe('张三')
+  })
   it('loads checklist items only for the selected project', async () => {
     vi.mocked(api.listChecklistItems).mockResolvedValue({ items: [checklistItem] })
     const store = useArchiveWorkspaceStore()

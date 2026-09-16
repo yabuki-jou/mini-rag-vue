@@ -33,7 +33,7 @@ const items: Array<{ view: ArchiveView; label: string; icon: string }> = [
     </nav>
     <div class="archive-sidebar-bottom">
       <button class="archive-nav-item" :class="{ active: activeView === 'settings' }" :disabled="!projectAvailable" @click="emit('navigate', 'settings')"><span>⚙</span>项目设置</button>
-      <a href="#implementation-boundary"><span>?</span>帮助文档</a>
+      <a href="#implementation-boundary"><span>?</span>实现边界</a>
     </div>
   </aside>
 </template>
