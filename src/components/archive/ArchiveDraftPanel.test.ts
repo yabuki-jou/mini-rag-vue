@@ -76,7 +76,7 @@ describe('ArchiveDraftPanel', () => {
   it('shows source, evidence locations, and the explicit no-evidence explanation', () => {
     const wrapper = mountPanel()
     expect(wrapper.text()).toContain('AI 建议')
-    expect(wrapper.text()).toContain('TEXT_LINE_RANGE 2–2')
+    expect(wrapper.text()).toContain('文本行区间 2')
     expect(wrapper.text()).toContain('人工填写、无原文证据')
     expect(wrapper.text()).toContain('完成七字段检查后可执行 FR-036 确认')
   })

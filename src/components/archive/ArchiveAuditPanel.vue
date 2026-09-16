@@ -74,7 +74,7 @@ function formatValue(value: unknown) {
         <div v-if="visibleSummary(log).length" class="audit-summary"><span v-for="item in visibleSummary(log)" :key="item.key">{{ item.label }}：{{ item.value }}</span></div>
       </article>
     </section>
-    <footer class="audit-pagination"><button data-testid="audit-prev-page" :disabled="!canPrev || loading.audit" @click="emit('page-change', page - 1)">上一页</button><button data-testid="audit-next-page" :disabled="!canNext || loading.audit" @click="emit('page-change', page + 1)">下一页</button></footer>
+    <footer class="audit-pagination"><button data-testid="audit-prev-page" :disabled="!canPrev || loading.audit" @click="emit('page-change', page - 1)">{{ loading.audit ? '加载中…' : '上一页' }}</button><button data-testid="audit-next-page" :disabled="!canNext || loading.audit" @click="emit('page-change', page + 1)">{{ loading.audit ? '加载中…' : '下一页' }}</button></footer>
   </section>
 </template>
 

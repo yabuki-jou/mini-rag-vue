@@ -119,6 +119,8 @@ export const api = {
   health: () => request<{ status: string; components: Record<string, { status: string; detail?: string }> }>('/health', {}, false),
   register: (payload: AuthRegisterRequest) => request<User>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }, false),
   login: (payload: AuthLoginRequest) => request<AuthTokenPair>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }, false),
+  /** 读取当前 Bearer 会话所属用户的公开资料，用于显示用户名而非登录账号。 */
+  currentUser: () => request<User>('/auth/me'),
   refreshSession,
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
   /** 仅访问当前 Bearer Access Token 所属的智慧档案项目。 */

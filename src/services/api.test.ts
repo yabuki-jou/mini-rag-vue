@@ -4,6 +4,21 @@ import { ApiError, api, clearApiTokens, setApiTokens } from './api'
 describe('API client', () => {
   beforeEach(() => { clearApiTokens(); localStorage.clear(); vi.restoreAllMocks() })
 
+  it('reads the signed-in profile through the protected current-user endpoint', async () => {
+    setApiTokens({ access_token: 'profile-access-token', refresh_token: 'refresh-token' })
+    const profile = {
+      id: 'user-1', username: '000001', name: '张三',
+      created_at: '2026-09-14T00:00:00Z', updated_at: '2026-09-14T00:00:00Z',
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(profile), { status: 200 }))
+
+    await expect(api.currentUser()).resolves.toEqual(profile)
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/me')
+    const headers = (fetchMock.mock.calls[0][1]?.headers as Headers)
+    expect(headers.get('Authorization')).toBe('Bearer profile-access-token')
+    expect(headers.get('X-User-ID')).toBeNull()
+  })
   it('attaches a Bearer Access Token and never sends the retired UUID header', async () => {
     setApiTokens({ access_token: 'access-token', refresh_token: 'refresh-token' })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))

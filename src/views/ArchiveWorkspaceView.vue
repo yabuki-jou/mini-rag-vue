@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ArchiveSidebar from '../components/archive/ArchiveSidebar.vue'
 import ArchiveDraftPanel from '../components/archive/ArchiveDraftPanel.vue'
@@ -13,7 +13,7 @@ import StatusMetric from '../components/archive/StatusMetric.vue'
 import UnavailablePanel from '../components/archive/UnavailablePanel.vue'
 import { api } from '../services/api'
 import { useArchiveWorkspaceStore } from '../stores/archive-workspace'
-import type { ArchiveAuditOperationType, ArchiveFieldName, ArchiveFieldUpdate, ArchiveFilters, ChecklistItemCreate, ChecklistItemUpdate, ChecklistLinkCreate } from '../types'
+import type { ArchiveAuditOperationType, ArchiveFieldName, ArchiveFieldUpdate, ArchiveFilters, ChecklistItemCreate, ChecklistItemUpdate, ChecklistLinkCreate, ProcessDocument } from '../types'
 
 type ArchiveView = 'overview' | 'checklist' | 'documents' | 'archives' | 'questions' | 'audit' | 'settings'
 
@@ -48,6 +48,17 @@ const viewByRouteName: Record<string, ArchiveView> = {
 const activeView = computed<ArchiveView>(() => viewByRouteName[String(route.name)] || 'overview')
 const activeProject = computed(() => store.activeProject)
 const projectAvailable = computed(() => Boolean(activeProject.value))
+const pendingConfirmationCount = computed(() => store.projectDocuments.filter(d => d.status === 'PENDING_CONFIRMATION' || d.status === 'PENDING_RECONFIRMATION').length)
+const failedCount = computed(() => store.projectDocuments.filter(d => d.status === 'PARSE_FAILED' || d.status === 'SUGGESTION_FAILED').length)
+const documentStatusLabels: Record<ProcessDocument['status'], string> = {
+    UPLOADED: '待解析',
+    PARSE_FAILED: '解析失败',
+    PARSED: '已解析',
+    SUGGESTION_FAILED: '建议失败',
+    PENDING_CONFIRMATION: '待人工确认',
+    CONFIRMED: '已确认',
+    PENDING_RECONFIRMATION: '待重新确认'
+}
 const statusText = computed(() => (health.value === 'ok' ? '服务状态：正常' : health.value === 'checking' ? '服务状态：检查中' : '服务状态：不可用'))
 const archiveFeature = computed<[string, string]>(() => {
     const featureByView: Partial<Record<ArchiveView, [string, string]>> = {
@@ -111,7 +122,7 @@ async function deleteChecklistItem(itemId: string) {
         await store.deleteChecklistItem(itemId)
     } catch {
         // 删除失败时 Store 不移除当前行，并显示后端稳定错误。
-  }
+    }
 }
 
 async function loadProjectDocuments() {
@@ -119,11 +130,12 @@ async function loadProjectDocuments() {
         await store.loadProjectDocuments()
     } catch {
         // 文档处理列表只展示当前项目的服务端响应，不以项目计数或本地缓存替代失败结果。
-  }
+    }
 }
 
 async function deleteProjectDocument(documentId: string, filename: string) {
-    if (!window.confirm(`确定物理删除文档“${filename}”吗？这会清理原文件、解析快照、正式档案、向量和清单关联，删除后无法从页面恢复。`)) return
+    const ok = await store.confirm(`确定物理删除文档“${filename}”吗？\n\n这会清理原文件、解析快照、正式档案、向量和清单关联，删除后无法从页面恢复。`, '物理删除文档', true)
+    if (!ok) return
     try {
         await store.deleteProjectDocument(documentId)
     } catch {
@@ -340,6 +352,10 @@ async function submitAuthentication() {
     const normalizedUsername = username.value.trim().toLowerCase()
     authValidationError.value = ''
     if (!normalizedUsername || !password.value) return
+    if (!/^[a-z0-9_-]{3,50}$/.test(normalizedUsername)) {
+        authValidationError.value = '账号必须为 3–50 位小写字母、数字、下划线或连字符。'
+        return
+    }
     if (authMode.value === 'register' && password.value !== passwordConfirmation.value) {
         authValidationError.value = '两次输入的密码不一致。'
         return
@@ -405,7 +421,8 @@ async function saveProjectSettings() {
 
 async function deleteProject() {
     if (!activeProject.value || activeProject.value.active_document_count > 0) return
-    if (!window.confirm(`确定删除空项目“${activeProject.value.name}”吗？`)) return
+    const ok = await store.confirm(`确定删除空项目“${activeProject.value.name}”吗？`, '删除空项目', true)
+    if (!ok) return
     try {
         await store.deleteProject(activeProject.value.id)
         router.push('/')
@@ -429,7 +446,7 @@ watch(
 )
 
 watch(
-  [activeView, () => store.activeProjectId],
+    [activeView, () => store.activeProjectId],
     ([view, projectId]) => {
         if (view === 'checklist' && projectId && store.isAuthenticated) loadChecklistItems()
         if ((view === 'documents' || view === 'overview') && projectId && store.isAuthenticated) loadProjectDocuments()
@@ -445,10 +462,10 @@ watch(
     ([documentId, view]) => {
         if (view === 'documents' && documentId && store.isAuthenticated) loadChecklistLinkState(documentId)
     },
-    { immediate: true },
+    { immediate: true }
 )
 
-onMounted(async () => {
+function refreshHealth() {
     api.health()
         .then(response => {
             health.value = response.status === 'ok' ? 'ok' : 'degraded'
@@ -456,6 +473,13 @@ onMounted(async () => {
         .catch(() => {
             health.value = 'degraded'
         })
+}
+
+let healthTimer: number | undefined
+
+onMounted(async () => {
+    refreshHealth()
+    healthTimer = window.setInterval(refreshHealth, 30000)
     if (store.isAuthenticated) {
         try {
             await store.restoreSession()
@@ -464,6 +488,10 @@ onMounted(async () => {
             store.clearSession()
         }
     }
+})
+
+onUnmounted(() => {
+    if (healthTimer) window.clearInterval(healthTimer)
 })
 </script>
 
@@ -481,12 +509,14 @@ onMounted(async () => {
             <form class="identity-form" @submit.prevent="submitAuthentication">
                 <span class="eyebrow">安全访问</span>
                 <h1>{{ authMode === 'login' ? '登录工作台' : '创建账号' }}</h1>
-                <p>{{ authMode === 'login' ? '使用用户名和密码登录，受保护请求将携带短期 Bearer Access Token。' : '创建账号后会自动登录；密码只用于本次请求，不会写入本地存储。' }}</p>
-                <label v-if="authMode === 'register'">显示名称<input v-model="displayName" maxlength="100" placeholder="例如：张工程师" autocomplete="name" required /></label>
-                <label>用户名<input v-model="username" maxlength="50" placeholder="3–50 位小写字母、数字、下划线或连字符" autocomplete="username" required /></label>
+                <p>{{ authMode === 'login' ? '使用账号和密码登录，受保护请求将携带短期 Bearer Access Token。' : '创建账号后会自动登录；密码只用于本次请求，不会写入本地存储。' }}</p>
+                <label v-if="authMode === 'register'">用户名<input v-model="displayName" maxlength="100" placeholder="例如：张三" autocomplete="name" required /></label>
+                <label>账号<input v-model="username" maxlength="50" placeholder="例如：000001（3–50 位小写字母、数字、下划线或连字符）" autocomplete="username" required /></label>
                 <label>密码<input v-model="password" type="password" :minlength="authMode === 'register' ? 8 : 1" maxlength="128" :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'" :placeholder="authMode === 'register' ? '至少 8 位' : '输入密码'" required /></label>
                 <label v-if="authMode === 'register'">确认密码<input v-model="passwordConfirmation" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="再次输入密码" required /></label>
-                <button class="primary-button" :disabled="!username.trim() || !password || (authMode === 'register' && (!displayName.trim() || !passwordConfirmation)) || store.loading.login || store.loading.register">{{ store.loading.login || store.loading.register ? '正在验证…' : authMode === 'login' ? '登录并进入' : '注册并进入' }}</button>
+                <button class="primary-button" :disabled="!username.trim() || !password || (authMode === 'register' && (!displayName.trim() || !passwordConfirmation)) || store.loading.login || store.loading.register">
+                    {{ store.loading.login || store.loading.register ? '正在验证…' : authMode === 'login' ? '登录并进入' : '注册并进入' }}
+                </button>
                 <button type="button" class="text-button" @click="toggleAuthMode">{{ authMode === 'login' ? '没有账号？创建一个' : '已有账号？返回登录' }}</button>
                 <p v-if="authValidationError || store.error" class="form-error">{{ authValidationError || store.error }}</p>
             </form>
@@ -514,12 +544,16 @@ onMounted(async () => {
                 </div>
             </header>
 
-            <div v-if="store.error" class="error-banner">
+            <div v-if="store.error" class="error-banner" role="alert" aria-live="assertive">
                 <div>
-                    <strong v-if="store.errorStatus">HTTP {{ store.errorStatus }}</strong
-                    ><span>{{ store.error }}</span>
+                    <strong v-if="store.errorStatus">HTTP {{ store.errorStatus }}{{ store.errorCode ? ` · ${store.errorCode}` : '' }}</strong>
+                    <span>{{ store.error }}</span>
+                    <details v-if="store.errorDetails" class="error-details">
+                        <summary>查看详细信息</summary>
+                        <pre>{{ JSON.stringify(store.errorDetails, null, 2) }}</pre>
+                    </details>
                 </div>
-                <button @click="store.clearError()">×</button>
+                <button aria-label="关闭错误提示" @click="store.clearError()">×</button>
             </div>
 
             <section class="archive-content">
@@ -544,8 +578,8 @@ onMounted(async () => {
                         <div class="metrics-grid">
                             <StatusMetric tone="primary" label="当前项目" :value="activeProject ? '已选择' : '未选择'" detail="项目 CRUD 已接入" />
                             <StatusMetric tone="success" label="演示清单" :value="activeProject?.uses_demo_checklist ? '5 项' : '—'" :detail="activeProject?.uses_demo_checklist ? '模板已复制' : '未复制模板'" />
-                            <StatusMetric tone="warning" label="待人工确认" value="—" detail="归档状态 API 待接入" />
-                            <StatusMetric tone="danger" label="处理失败" value="—" detail="解析状态 API 待接入" />
+                            <StatusMetric tone="warning" label="待人工确认" :value="String(pendingConfirmationCount)" detail="待确认/重新确认文档" />
+                            <StatusMetric tone="danger" label="处理失败" :value="String(failedCount)" detail="解析失败/建议失败" />
                         </div>
 
                         <div class="overview-grid">
@@ -599,8 +633,13 @@ onMounted(async () => {
                             <div class="preview-toolbar"><button disabled>状态筛选　⌄</button><input disabled placeholder="搜索文件名（后续接入）" /></div>
                             <div class="preview-table">
                                 <div class="preview-table-head"><span>文档名</span><span>处理阶段</span><span>状态</span><span>操作</span></div>
-                                <div v-if="!store.projectDocuments.length" class="preview-empty">当前没有已加载的项目文档；进入文档处理可上传并查看真实处理状态。</div>
-                                <div v-else v-for="document in store.projectDocuments.slice(0, 3)" :key="document.id" class="preview-row"><span>{{ document.filename }}</span><span>文档处理</span><span>{{ document.status }}</span><button class="link-button" @click="navigate('documents')">查看</button></div>
+                                <div v-if="store.loading['project-documents'] && !store.projectDocuments.length" class="preview-empty">正在加载文档列表…</div>
+                                <div v-else-if="!store.projectDocuments.length" class="preview-empty">当前没有已加载的项目文档；进入文档处理可上传并查看真实处理状态。</div>
+                                <div v-else v-for="document in store.projectDocuments.slice(0, 3)" :key="document.id" class="preview-row">
+                                    <span class="preview-name">{{ document.filename }}</span
+                                    ><span>文档处理</span><span class="preview-status" :class="document.status.toLowerCase()">{{ documentStatusLabels[document.status] || document.status }}</span
+                                    ><button class="link-button" @click="navigate('documents')">查看</button>
+                                </div>
                             </div>
                             <button class="link-button" @click="navigate('documents')">查看全部文档 → 文档处理</button>
                         </article>
@@ -619,8 +658,7 @@ onMounted(async () => {
                     @refresh="loadChecklistItems"
                     @create="createChecklistItem"
                     @update="updateChecklistItem"
-                    @delete="deleteChecklistItem"
-                />
+                    @delete="deleteChecklistItem" />
 
                 <template v-else-if="activeView === 'documents' && activeProject">
                     <DocumentProcessingPanel
@@ -640,8 +678,7 @@ onMounted(async () => {
                         @retry-suggestions="retryArchiveSuggestions"
                         @create-manual-draft="createManualArchiveDraft"
                         @open-draft="openArchiveDraft"
-                        @delete="deleteProjectDocument"
-                    />
+                        @delete="deleteProjectDocument" />
                     <ArchiveDraftPanel
                         v-if="store.currentDraft"
                         :draft="store.currentDraft"
@@ -652,8 +689,7 @@ onMounted(async () => {
                         @manual-draft="createManualArchiveDraft"
                         @save-field="saveArchiveField"
                         @confirm="confirmArchiveDocument"
-                        @cancel-confirmation="cancelArchiveDocumentConfirmation"
-                    />
+                        @cancel-confirmation="cancelArchiveDocumentConfirmation" />
                     <ChecklistLinkPanel
                         v-if="store.currentDraft"
                         :document="store.currentDraft.document"
@@ -663,8 +699,7 @@ onMounted(async () => {
                         :loading="store.loading"
                         @refresh="loadChecklistLinkState"
                         @create="createChecklistLink"
-                        @delete="deleteChecklistLink"
-                    />
+                        @delete="deleteChecklistLink" />
                 </template>
 
                 <ArchiveCatalogPanel
@@ -678,17 +713,9 @@ onMounted(async () => {
                     :current-archive="store.currentArchive"
                     @filter-change="changeArchiveFilters"
                     @page-change="store.loadArchivePage"
-                    @open-detail="loadArchiveDetail"
-                />
+                    @open-detail="loadArchiveDetail" />
 
-                <ArchiveQuestionPanel
-                    v-else-if="activeView === 'questions' && activeProject"
-                    :answer="store.archiveAnswer"
-                    :retrieval="store.archiveRetrieval"
-                    :loading="store.loading"
-                    @ask="askArchiveQuestion"
-                    @retrieve="retrieveArchiveEvidence"
-                />
+                <ArchiveQuestionPanel v-else-if="activeView === 'questions' && activeProject" :answer="store.archiveAnswer" :retrieval="store.archiveRetrieval" :loading="store.loading" @ask="askArchiveQuestion" @retrieve="retrieveArchiveEvidence" />
 
                 <ArchiveAuditPanel
                     v-else-if="activeView === 'audit' && activeProject"
@@ -700,8 +727,7 @@ onMounted(async () => {
                     :loading="store.loading"
                     @filter-change="changeAuditOperationType"
                     @page-change="store.loadAuditPage"
-                    @refresh="loadAuditLogs"
-                />
+                    @refresh="loadAuditLogs" />
 
                 <section v-else-if="activeView === 'settings'" class="settings-page">
                     <header class="page-heading">
@@ -740,8 +766,11 @@ onMounted(async () => {
                 <label>项目名称<input v-model="projectName" maxlength="200" placeholder="例如：滨江研发中心改造项目" autofocus required /> </label><label>项目说明<textarea v-model="projectDescription" maxlength="2000" placeholder="可选；不填写行业扩展字段"></textarea></label>
                 <label class="checkbox-row"> <input v-model="useDemoChecklist" type="checkbox" />复制五项虚构演示清单<small>仅用于学习和验收，不代表法定或行业归档要求。</small></label>
                 <button class="primary-button" :disabled="!projectName.trim() || store.loading['create-project']">{{ store.loading['create-project'] ? '正在创建…' : '创建项目' }}</button>
+                <p v-if="store.error" class="form-error" data-testid="modal-error">
+                    <strong v-if="store.errorStatus">HTTP {{ store.errorStatus }}</strong>
+                    {{ store.error }}
+                </p>
             </form>
         </div>
     </div>
 </template>
-
