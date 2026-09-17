@@ -15,6 +15,11 @@ import type {
   ArchiveAuditOperationType,
   ArchiveQuestionRequest,
   ArchiveQuestionResponse,
+  ArchiveAgentMessage,
+  ArchiveAgentMessageCreate,
+  ArchiveAgentResponse,
+  ArchiveAgentSession,
+  ArchiveAgentToolCallLog,
   ArchiveRetrievalRequest,
   ArchiveRetrievalResponse,
   ArchiveConfirmationRequest,
@@ -178,6 +183,14 @@ export const api = {
   retrieveArchives: (projectId: string, payload: ArchiveRetrievalRequest) => request<ArchiveRetrievalResponse>(`/projects/${projectId}/archive-retrieval`, { method: 'POST', body: JSON.stringify(payload) }),
   /** FR-039：提交单轮问题；回答和引用均由服务端正式证据链返回。 */
   askArchiveQuestion: (projectId: string, payload: ArchiveQuestionRequest) => request<ArchiveQuestionResponse>(`/projects/${projectId}/archive-questions`, { method: 'POST', body: JSON.stringify(payload) }),
+  /** FR-042：在当前项目服务端授权范围内创建独立档案助手会话。 */
+  createArchiveAgentSession: (projectId: string) => request<ArchiveAgentSession>(`/projects/${projectId}/agent-sessions`, { method: 'POST', body: JSON.stringify({}) }),
+  /** FR-042：顺序发送当前会话的一条用户消息，不提交任何身份或知识库字段。 */
+  sendArchiveAgentMessage: (projectId: string, sessionId: string, payload: ArchiveAgentMessageCreate) => request<ArchiveAgentResponse>(`/projects/${projectId}/agent-sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify(payload) }),
+  /** FR-042：读取当前会话的完整可见轮次，不读取内部工具消息。 */
+  listArchiveAgentMessages: (projectId: string, sessionId: string) => request<ArchiveAgentMessage[]>(`/projects/${projectId}/agent-sessions/${sessionId}/messages`),
+  /** FR-042：读取当前会话的脱敏工具调用记录。 */
+  listArchiveAgentToolCalls: (projectId: string, sessionId: string) => request<ArchiveAgentToolCallLog[]>(`/projects/${projectId}/agent-sessions/${sessionId}/tool-calls`),
   /** 仅对 UPLOADED 文档发起首次解析；状态是否允许由后端判断。 */
   parseProjectDocument: (projectId: string, documentId: string) => request<ProcessDocument>(`/projects/${projectId}/documents/${documentId}/parse`, { method: 'POST' }),
   /** 仅对 PARSE_FAILED 文档使用专用重试端点，不能退化为普通 parse。 */

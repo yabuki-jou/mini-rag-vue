@@ -9,13 +9,14 @@ import DocumentProcessingPanel from '../components/archive/DocumentProcessingPan
 import ArchiveCatalogPanel from '../components/archive/ArchiveCatalogPanel.vue'
 import ArchiveAuditPanel from '../components/archive/ArchiveAuditPanel.vue'
 import ArchiveQuestionPanel from '../components/archive/ArchiveQuestionPanel.vue'
+import ArchiveAgentPanel from '../components/archive/ArchiveAgentPanel.vue'
 import StatusMetric from '../components/archive/StatusMetric.vue'
 import UnavailablePanel from '../components/archive/UnavailablePanel.vue'
 import { api } from '../services/api'
 import { useArchiveWorkspaceStore } from '../stores/archive-workspace'
 import type { ArchiveAuditOperationType, ArchiveFieldName, ArchiveFieldUpdate, ArchiveFilters, ChecklistItemCreate, ChecklistItemUpdate, ChecklistLinkCreate, ProcessDocument } from '../types'
 
-type ArchiveView = 'overview' | 'checklist' | 'documents' | 'archives' | 'questions' | 'audit' | 'settings'
+type ArchiveView = 'overview' | 'checklist' | 'documents' | 'archives' | 'questions' | 'agent' | 'audit' | 'settings'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +42,7 @@ const viewByRouteName: Record<string, ArchiveView> = {
     documents: 'documents',
     archives: 'archives',
     questions: 'questions',
+    'archive-agent': 'agent',
     audit: 'audit',
     settings: 'settings'
 }
@@ -65,6 +67,7 @@ const archiveFeature = computed<[string, string]>(() => {
         documents: ['FR-032 / FR-033', '后端已提供项目内上传、解析和重试接口；前端尚未接入。'],
         archives: ['FR-038', '正式档案目录已接入服务端确认结果、筛选、分页与字段证据。'],
         questions: ['FR-039', '在当前项目正式档案范围内执行原文检索与单轮带证据问答。'],
+        agent: ['FR-042', '在当前项目正式档案范围内执行持久化多轮档案问答。'],
         audit: ['FR-041', '按受控操作类型查询当前项目的脱敏审计记录。']
     }
     return featureByView[activeView.value] || ['[TODO]', '该功能尚未进入当前前端范围。']
@@ -78,6 +81,7 @@ function projectPath(view: ArchiveView, projectId: string) {
         documents: `${root}/documents`,
         archives: `${root}/archives`,
         questions: `${root}/archive-questions`,
+        agent: `${root}/archive-agent`,
         audit: `${root}/audit-logs`,
         settings: `${root}/settings`
     }[view]
@@ -188,6 +192,38 @@ async function askArchiveQuestion(question: string) {
         await store.askArchiveQuestion(question)
     } catch {
         // 问答失败时保留服务端错误提示，不以检索结果拼装答案。
+    }
+}
+
+async function createArchiveAgentSession() {
+    try {
+        await store.createArchiveAgentSession()
+    } catch {
+        // 创建失败只显示后端稳定错误，不在客户端构造或复用旧会话标识。
+    }
+}
+
+async function sendArchiveAgentMessage(message: string) {
+    try {
+        await store.sendArchiveAgentMessage(message)
+    } catch {
+        // 发送失败保留当前完整历史，允许用户按服务端错误决定是否重试。
+    }
+}
+
+async function loadArchiveAgentMessages() {
+    try {
+        await store.loadArchiveAgentMessages()
+    } catch {
+        // 历史读取失败不清空最近一次成功显示的完整轮次。
+    }
+}
+
+async function loadArchiveAgentToolCalls() {
+    try {
+        await store.loadArchiveAgentToolCalls()
+    } catch {
+        // 工具日志只接受后端脱敏响应，失败时不从消息正文推断调用记录。
     }
 }
 
@@ -717,6 +753,18 @@ onUnmounted(() => {
 
                 <ArchiveQuestionPanel v-else-if="activeView === 'questions' && activeProject" :answer="store.archiveAnswer" :retrieval="store.archiveRetrieval" :loading="store.loading" @ask="askArchiveQuestion" @retrieve="retrieveArchiveEvidence" />
 
+                <ArchiveAgentPanel
+                    v-else-if="activeView === 'agent' && activeProject"
+                    :session="store.archiveAgentSession"
+                    :messages="store.archiveAgentMessages"
+                    :last-response="store.archiveAgentLastResponse"
+                    :tool-calls="store.archiveAgentToolCalls"
+                    :loading="store.loading"
+                    @create-session="createArchiveAgentSession"
+                    @send="sendArchiveAgentMessage"
+                    @refresh-history="loadArchiveAgentMessages"
+                    @refresh-tool-calls="loadArchiveAgentToolCalls" />
+
                 <ArchiveAuditPanel
                     v-else-if="activeView === 'audit' && activeProject"
                     :logs="store.auditLogs"
@@ -752,7 +800,7 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <UnavailablePanel v-else :title="({ checklist: '项目与清单', documents: '文档处理', archives: '正式档案', questions: '智能检索', audit: '审计日志' } as Record<string, string>)[activeView]" :feature="archiveFeature[0]" :description="archiveFeature[1]" />
+                <UnavailablePanel v-else :title="({ checklist: '项目与清单', documents: '文档处理', archives: '正式档案', questions: '智能检索', agent: '档案助手', audit: '审计日志' } as Record<string, string>)[activeView]" :feature="archiveFeature[0]" :description="archiveFeature[1]" />
             </section>
         </section>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-type ArchiveView = 'overview' | 'checklist' | 'documents' | 'archives' | 'questions' | 'audit' | 'settings'
+type ArchiveView = 'overview' | 'checklist' | 'documents' | 'archives' | 'questions' | 'agent' | 'audit' | 'settings'
 
 defineProps<{
   activeView: ArchiveView
@@ -14,6 +14,7 @@ const items: Array<{ view: ArchiveView; label: string; icon: string }> = [
   { view: 'documents', label: '文档处理', icon: '▧' },
   { view: 'archives', label: '正式档案', icon: '▱' },
   { view: 'questions', label: '智能检索', icon: '⌕' },
+  { view: 'agent', label: '档案助手', icon: '◇' },
   { view: 'audit', label: '审计日志', icon: '▦' },
 ]
 </script>

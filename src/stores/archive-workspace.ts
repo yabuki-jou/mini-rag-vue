@@ -13,6 +13,10 @@ import type {
     ArchivePage,
     ArchiveAuditLog,
     ArchiveAuditOperationType,
+    ArchiveAgentMessage,
+    ArchiveAgentResponse,
+    ArchiveAgentSession,
+    ArchiveAgentToolCallLog,
     ArchiveQuestionResponse,
     ArchiveRetrievalResponse,
     ArchiveSummary,
@@ -73,6 +77,11 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
         archiveAnswer: null as ArchiveQuestionResponse | null,
         archiveQuestionRequestId: 0,
         archiveQuestionSuccessfulRequestId: 0,
+        archiveAgentSession: null as ArchiveAgentSession | null,
+        archiveAgentMessages: [] as ArchiveAgentMessage[],
+        archiveAgentLastResponse: null as ArchiveAgentResponse | null,
+        archiveAgentToolCalls: [] as ArchiveAgentToolCallLog[],
+        archiveAgentRequestId: 0,
         currentDraft: null as ArchiveDraft | null,
         activeProjectId: localStorage.getItem(projectIdKey) || '',
         loading: {} as Record<string, boolean>,
@@ -213,6 +222,15 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
                 this.archiveRetrievalRequestId += 1
                 this.archiveAnswer = null
                 this.archiveQuestionRequestId += 1
+                this.archiveAgentSession = null
+                this.archiveAgentMessages = []
+                this.archiveAgentLastResponse = null
+                this.archiveAgentToolCalls = []
+                this.archiveAgentRequestId += 1
+                this.loading['archive-agent-session'] = false
+                this.loading['archive-agent-message'] = false
+                this.loading['archive-agent-history'] = false
+                this.loading['archive-agent-tool-calls'] = false
                 this.currentDraft = null
             }
             this.activeProjectId = projectId
@@ -510,6 +528,105 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
                 if (this.archiveQuestionRequestId === requestId) this.loading['archive-question'] = false
             }
             return response && this.archiveQuestionRequestId === requestId && this.activeProjectId === projectId ? response : undefined
+        },
+        async createArchiveAgentSession() {
+            const projectId = this.activeProjectId
+            if (!this.isAuthenticated || !projectId || this.loading['archive-agent-session']) return undefined
+            const requestId = ++this.archiveAgentRequestId
+            this.loading['archive-agent-session'] = true
+            this.clearError()
+            try {
+                const response = await api.createArchiveAgentSession(projectId)
+                if (this.activeProjectId !== projectId || this.archiveAgentRequestId !== requestId) return undefined
+                this.archiveAgentSession = response
+                this.archiveAgentMessages = []
+                this.archiveAgentLastResponse = null
+                this.archiveAgentToolCalls = []
+                return response
+            } catch (error) {
+                if (this.activeProjectId !== projectId || this.archiveAgentRequestId !== requestId) return undefined
+                this.error = error instanceof Error ? error.message : '发生未知错误。'
+                this.errorStatus = error instanceof ApiError ? error.status : null
+                this.errorDetails = error instanceof ApiError ? error.details : null
+                this.errorCode = error instanceof ApiError ? error.code : ''
+                throw error
+            } finally {
+                if (this.archiveAgentRequestId === requestId) this.loading['archive-agent-session'] = false
+            }
+        },
+        async sendArchiveAgentMessage(message: string) {
+            const projectId = this.activeProjectId
+            const sessionId = this.archiveAgentSession?.id || ''
+            const normalizedMessage = message.trim()
+            if (!this.isAuthenticated || !projectId || !sessionId || !normalizedMessage || this.loading['archive-agent-message']) return undefined
+            const requestId = this.archiveAgentRequestId
+            this.loading['archive-agent-message'] = true
+            this.clearError()
+            try {
+                const response = await api.sendArchiveAgentMessage(projectId, sessionId, { message: normalizedMessage })
+                if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
+                this.archiveAgentMessages.push(
+                    { role: 'USER', content: normalizedMessage, citations: [] },
+                    { role: 'ASSISTANT', content: response.answer, citations: response.citations },
+                )
+                this.archiveAgentLastResponse = response
+                return response
+            } catch (error) {
+                if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
+                this.error = error instanceof Error ? error.message : '发生未知错误。'
+                this.errorStatus = error instanceof ApiError ? error.status : null
+                this.errorDetails = error instanceof ApiError ? error.details : null
+                this.errorCode = error instanceof ApiError ? error.code : ''
+                throw error
+            } finally {
+                if (this.archiveAgentRequestId === requestId) this.loading['archive-agent-message'] = false
+            }
+        },
+        async loadArchiveAgentMessages() {
+            const projectId = this.activeProjectId
+            const sessionId = this.archiveAgentSession?.id || ''
+            if (!this.isAuthenticated || !projectId || !sessionId || this.loading['archive-agent-history']) return undefined
+            const requestId = this.archiveAgentRequestId
+            this.loading['archive-agent-history'] = true
+            this.clearError()
+            try {
+                const response = await api.listArchiveAgentMessages(projectId, sessionId)
+                if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
+                this.archiveAgentMessages = response
+                return response
+            } catch (error) {
+                if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
+                this.error = error instanceof Error ? error.message : '发生未知错误。'
+                this.errorStatus = error instanceof ApiError ? error.status : null
+                this.errorDetails = error instanceof ApiError ? error.details : null
+                this.errorCode = error instanceof ApiError ? error.code : ''
+                throw error
+            } finally {
+                if (this.archiveAgentRequestId === requestId) this.loading['archive-agent-history'] = false
+            }
+        },
+        async loadArchiveAgentToolCalls() {
+            const projectId = this.activeProjectId
+            const sessionId = this.archiveAgentSession?.id || ''
+            if (!this.isAuthenticated || !projectId || !sessionId || this.loading['archive-agent-tool-calls']) return undefined
+            const requestId = this.archiveAgentRequestId
+            this.loading['archive-agent-tool-calls'] = true
+            this.clearError()
+            try {
+                const response = await api.listArchiveAgentToolCalls(projectId, sessionId)
+                if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
+                this.archiveAgentToolCalls = response
+                return response
+            } catch (error) {
+                if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
+                this.error = error instanceof Error ? error.message : '发生未知错误。'
+                this.errorStatus = error instanceof ApiError ? error.status : null
+                this.errorDetails = error instanceof ApiError ? error.details : null
+                this.errorCode = error instanceof ApiError ? error.code : ''
+                throw error
+            } finally {
+                if (this.archiveAgentRequestId === requestId) this.loading['archive-agent-tool-calls'] = false
+            }
         },
         async loadArchiveDetail(documentId: string) {
             const projectId = this.activeProjectId

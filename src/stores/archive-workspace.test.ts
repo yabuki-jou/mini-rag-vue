@@ -45,6 +45,10 @@ vi.mock('../services/api', async (original) => {
       deleteChecklistLink: vi.fn(),
       retrieveArchives: vi.fn(),
       askArchiveQuestion: vi.fn(),
+      createArchiveAgentSession: vi.fn(),
+      sendArchiveAgentMessage: vi.fn(),
+      listArchiveAgentMessages: vi.fn(),
+      listArchiveAgentToolCalls: vi.fn(),
     },
   }
 })
@@ -882,6 +886,89 @@ describe('archive workspace store', () => {
     store.selectProject('project-2')
     expect(store.archiveRetrieval).toBeNull()
     expect(store.archiveAnswer).toBeNull()
+  })
+
+  it('creates one FR-042 session and keeps two sequential visible rounds', async () => {
+    const session = { id: 'session-1', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
+    vi.mocked(api.createArchiveAgentSession).mockResolvedValue(session)
+    vi.mocked(api.sendArchiveAgentMessage)
+      .mockResolvedValueOnce({ session_id: session.id, answer_status: 'REFUSED_NO_EVIDENCE', answer: '正式档案中没有足够依据。', citations: [], request_id: 'request-1' })
+      .mockResolvedValueOnce({ session_id: session.id, answer_status: 'ANSWERED', answer: '签订日期为 2026-01-02。', citations: [{ filename: '合同.txt', location_type: 'TEXT_LINE_RANGE', location_start: 2, location_end: 2, excerpt: '签订日期：2026-01-02' }], request_id: 'request-2' })
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+
+    await store.createArchiveAgentSession()
+    await store.sendArchiveAgentMessage('  先问一个无据问题  ')
+    await store.sendArchiveAgentMessage('合同签订日期是什么？')
+
+    expect(api.createArchiveAgentSession).toHaveBeenCalledWith(project.id)
+    expect(api.sendArchiveAgentMessage).toHaveBeenNthCalledWith(1, project.id, session.id, { message: '先问一个无据问题' })
+    expect(api.sendArchiveAgentMessage).toHaveBeenNthCalledWith(2, project.id, session.id, { message: '合同签订日期是什么？' })
+    expect(store.archiveAgentMessages.map(item => item.role)).toEqual(['USER', 'ASSISTANT', 'USER', 'ASSISTANT'])
+    expect(store.archiveAgentMessages[3].citations[0]).toMatchObject({ filename: '合同.txt', excerpt: '签订日期：2026-01-02' })
+    expect(store.archiveAgentLastResponse?.answer_status).toBe('ANSWERED')
+  })
+
+  it('refreshes only the current FR-042 session history and redacted tool calls', async () => {
+    const session = { id: 'session-1', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
+    const messages = [{ role: 'USER' as const, content: '列出档案', citations: [] }]
+    const toolCalls = [{ id: 'log-1', tool_call_id: 'call-1', tool_name: 'list_formal_archives', status: 'COMPLETED' as const, arguments_summary: { page: 1, page_size: 20, filter_names: [] }, result_summary: { found: true, result_count: 1 }, duration_ms: 8, error_code: null, created_at: '2026-09-17T00:00:01Z', updated_at: '2026-09-17T00:00:01Z' }]
+    vi.mocked(api.listArchiveAgentMessages).mockResolvedValue(messages)
+    vi.mocked(api.listArchiveAgentToolCalls).mockResolvedValue(toolCalls)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.archiveAgentSession = session
+
+    await store.loadArchiveAgentMessages()
+    await store.loadArchiveAgentToolCalls()
+
+    expect(api.listArchiveAgentMessages).toHaveBeenCalledWith(project.id, session.id)
+    expect(api.listArchiveAgentToolCalls).toHaveBeenCalledWith(project.id, session.id)
+    expect(store.archiveAgentMessages).toEqual(messages)
+    expect(store.archiveAgentToolCalls).toEqual(toolCalls)
+  })
+
+  it('clears the FR-042 session on project switch and ignores its late response', async () => {
+    let resolveMessage!: (value: { session_id: string; answer_status: 'ANSWERED'; answer: string; citations: never[]; request_id: string }) => void
+    vi.mocked(api.sendArchiveAgentMessage).mockImplementationOnce(() => new Promise(resolve => { resolveMessage = resolve }))
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project, { ...project, id: 'project-2', name: '另一个项目' }]
+    store.activeProjectId = project.id
+    store.archiveAgentSession = { id: 'session-1', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
+
+    const pending = store.sendArchiveAgentMessage('旧项目问题')
+    store.selectProject('project-2')
+    resolveMessage({ session_id: 'session-1', answer_status: 'ANSWERED', answer: '旧项目回答', citations: [], request_id: 'request-1' })
+    await pending
+
+    expect(store.archiveAgentSession).toBeNull()
+    expect(store.archiveAgentLastResponse).toBeNull()
+    expect(store.archiveAgentMessages).toEqual([])
+    expect(store.archiveAgentToolCalls).toEqual([])
+    expect(store.error).toBe('')
+  })
+
+  it('does not leak a late FR-042 history error into the newly selected project', async () => {
+    let rejectHistory!: (reason: Error) => void
+    vi.mocked(api.listArchiveAgentMessages).mockImplementationOnce(() => new Promise((_, reject) => { rejectHistory = reject }))
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project, { ...project, id: 'project-2', name: '另一个项目' }]
+    store.activeProjectId = project.id
+    store.archiveAgentSession = { id: 'session-1', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
+
+    const pending = store.loadArchiveAgentMessages()
+    store.selectProject('project-2')
+    rejectHistory(new ApiError('ARCHIVE_AGENT_SESSION_NOT_FOUND', '会话不存在。', 404))
+    await expect(pending).resolves.toBeUndefined()
+
+    expect(store.error).toBe('')
+    expect(store.errorStatus).toBeNull()
   })
 
   it('accepts only the last retrieval and question response, including stale errors', async () => {
