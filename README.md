@@ -38,6 +38,14 @@ FR-042 客户端只提交空对象创建会话和 `{ message }` 发送消息；`
 - Pinia
 - Vitest + Vue Test Utils
 
+## 文档导航
+
+- [Vue 文档目录](docs/README.md)
+- [当前交接](docs/stage/handoff.md)
+- [FR-042 Vue 接入说明](docs/implementation/FR042-Vue接入说明.md)
+- [FR-042 Vue 真实代理闭环验收](docs/review/FR-042-Vue真实代理闭环验收/验收复盘.md)
+- [后端 API 契约](https://github.com/yabuki-jou/mini-rag-milvus/blob/main/docs/design/接口设计.md)
+
 ## 项目结构
 
 ```text
