@@ -34,17 +34,6 @@ export interface AuthAccessToken {
   token_type: 'bearer'
   access_expires_in: number
 }
-export interface KnowledgeBase { id: string; owner_id: string; name: string; created_at: string }
-export interface DocumentRecord {
-  id: string; kb_id: string; original_name: string; suffix: string; content_hash: string
-  status: string; chunk_count: number; error_message: string | null; created_at: string; updated_at: string
-}
-export interface ChatSession { id: string; owner_id: string; kb_id: string; title: string; created_at: string; updated_at?: string }
-export interface Source { source_id: string; chunk_id: string; document_id: string; document_name: string; page: number | null; excerpt: string; score: number }
-export interface ChatMessage { id?: string; role: 'user' | 'assistant'; content: string; rejected: boolean; sources: Source[]; created_at?: string }
-export interface RetrievedChunk { chunk_id: string; document_id: string; document_name: string; page: number | null; content: string; score: number }
-export interface RetrievalResponse { question: string; top_k: number; top_n: number; threshold: number; chunks: RetrievedChunk[] }
-
 /** 智慧档案 V1 项目管理接口返回的项目摘要。 */
 export interface ArchiveProject {
   id: string
