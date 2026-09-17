@@ -432,4 +432,54 @@ describe('API client', () => {
     expect((fetchMock.mock.calls[3][1] as RequestInit).method).toBe('DELETE')
     for (const [, init] of fetchMock.mock.calls) expect((init?.headers as Headers).get('Authorization')).toBe('Bearer link-access-token')
   })
+
+  it('uses the four FR-042 project archive agent endpoints without client scope fields', async () => {
+    setApiTokens({ access_token: 'archive-agent-access-token', refresh_token: 'refresh-token' })
+    const session = {
+      id: 'session-1', project_id: 'project-1',
+      created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z',
+    }
+    const response = {
+      session_id: 'session-1', answer_status: 'ANSWERED', answer: '签订日期为 2026-01-02。',
+      citations: [{ filename: '合同.txt', location_type: 'TEXT_LINE_RANGE', location_start: 2, location_end: 2, excerpt: '签订日期：2026-01-02' }],
+      request_id: 'request-1',
+    }
+    const history = [
+      { role: 'USER', content: '合同签订日期是什么？', citations: [] },
+      { role: 'ASSISTANT', content: response.answer, citations: response.citations },
+    ]
+    const toolCalls = [{
+      id: 'log-1', tool_call_id: 'call-1', tool_name: 'search_confirmed_archive_evidence', status: 'COMPLETED',
+      arguments_summary: { query_provided: true, query_length: 8 }, result_summary: { found: true, result_count: 1 }, duration_ms: 12,
+      error_code: null, created_at: '2026-09-17T00:00:01Z', updated_at: '2026-09-17T00:00:01Z',
+    }]
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(history), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(toolCalls), { status: 200 }))
+
+    await expect(api.createArchiveAgentSession('project-1')).resolves.toEqual(session)
+    await expect(api.sendArchiveAgentMessage('project-1', 'session-1', { message: '合同签订日期是什么？' })).resolves.toEqual(response)
+    await expect(api.listArchiveAgentMessages('project-1', 'session-1')).resolves.toEqual(history)
+    await expect(api.listArchiveAgentToolCalls('project-1', 'session-1')).resolves.toEqual(toolCalls)
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/projects/project-1/agent-sessions',
+      '/api/projects/project-1/agent-sessions/session-1/messages',
+      '/api/projects/project-1/agent-sessions/session-1/messages',
+      '/api/projects/project-1/agent-sessions/session-1/tool-calls',
+    ])
+    const [createInit, sendInit, historyInit, toolCallsInit] = fetchMock.mock.calls.map(([, init]) => init as RequestInit)
+    expect(createInit.method).toBe('POST')
+    expect(createInit.body).toBe(JSON.stringify({}))
+    expect(sendInit.method).toBe('POST')
+    expect(sendInit.body).toBe(JSON.stringify({ message: '合同签订日期是什么？' }))
+    expect(historyInit.method).toBeUndefined()
+    expect(toolCallsInit.method).toBeUndefined()
+    for (const init of [createInit, sendInit, historyInit, toolCallsInit]) {
+      expect((init.headers as Headers).get('Authorization')).toBe('Bearer archive-agent-access-token')
+      expect((init.headers as Headers).get('X-User-ID')).toBeNull()
+    }
+  })
 })

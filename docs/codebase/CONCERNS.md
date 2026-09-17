@@ -41,5 +41,5 @@
 - `src/services/api.test.ts`
 - `src/views/ArchiveWorkspaceView.vue`
 - `src/views/WorkspaceView.vue`
-- `docs/review/archive-v1-ui-guidelines.md`
+- `docs/design/archive-v1-ui-guidelines.md`
 - 相邻后端 `docs/api-design.md`

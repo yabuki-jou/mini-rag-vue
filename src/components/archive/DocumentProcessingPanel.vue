@@ -147,9 +147,9 @@ function canOpenDraft(document: ProcessDocument) {
                     </button>
                     <button v-else-if="document.status === 'PARSED'" class="primary-button" data-testid="create-archive-suggestions" :disabled="loading[`create-archive-suggestions:${document.id}`]" @click="emit('create-suggestions', document.id)">生成 AI 建议</button>
                     <button v-else-if="document.status === 'SUGGESTION_FAILED'" class="secondary-button" data-testid="retry-suggestions" :disabled="loading[`retry-archive-suggestions:${document.id}`]" @click="emit('retry-suggestions', document.id)">重试 AI 建议</button>
-                    <button v-if="document.status === 'PARSED' || document.status === 'SUGGESTION_FAILED'" class="link-button" data-testid="create-manual-draft" :disabled="loading[`create-manual-archive-draft:${document.id}`]" @click="emit('create-manual-draft', document.id)">启动人工草稿</button>
-                    <button v-if="canOpenDraft(document)" class="link-button" data-testid="open-archive-draft" @click="emit('open-draft', document.id)">打开字段草稿</button>
-                    <button class="danger-button" data-testid="delete-project-document" :disabled="loading[`delete-project-document:${document.id}`]" @click="emit('delete', document.id, document.filename)">
+                    <button v-if="document.status === 'PARSED' || document.status === 'SUGGESTION_FAILED'" class="secondary-button sm" data-testid="create-manual-draft" :disabled="loading[`create-manual-archive-draft:${document.id}`]" @click="emit('create-manual-draft', document.id)">启动人工草稿</button>
+                    <button v-if="canOpenDraft(document)" class="secondary-button sm" data-testid="open-archive-draft" @click="emit('open-draft', document.id)">打开字段草稿</button>
+                    <button class="danger-button sm" data-testid="delete-project-document" :disabled="loading[`delete-project-document:${document.id}`]" @click="emit('delete', document.id, document.filename)">
                         {{ loading[`delete-project-document:${document.id}`] ? '删除中…' : '删除文档' }}
                     </button>
                     <small v-if="document.status !== 'UPLOADED' && document.status !== 'PARSE_FAILED' && document.status !== 'PARSED' && document.status !== 'SUGGESTION_FAILED' && !canOpenDraft(document)">当前状态无解析操作</small>

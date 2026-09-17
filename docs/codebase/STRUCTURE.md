@@ -13,7 +13,7 @@
 | src/stores/ | Pinia 会话与工作台状态 | archive-workspace.ts、workspace.ts |
 | src/types/ | 前后端 DTO 类型 | src/types/index.ts |
 | src/views/ | 页面级组件 | ArchiveWorkspaceView.vue、WorkspaceView.vue |
-| docs/review/ | UI 规则 | archive-v1-ui-guidelines.md |
+| docs/design/ | UI 规则 | archive-v1-ui-guidelines.md |
 | docs/codebase/ | 此次生成的交接文档 | 本目录 |
 
 ## 2. 入口与路由

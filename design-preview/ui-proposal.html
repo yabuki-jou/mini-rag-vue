@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI 风格提案 · 智慧档案工作台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <style>
+    /* ============================================================
+   设计令牌（与后续 styles.css 的 token 一一对应）
+   ============================================================ */
+    :root {
+      /* 字体 */
+      --font-sans: 'Geist', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+      --font-mono: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
+      /* 中性灰层级 */
+      --bg: #f9f9fa;
+      --surface: #ffffff;
+      --surface-2: #f4f5f6;
+      --line: #e6e7ea;
+      --line-strong: #d9dbdf;
+      --ink: #1c1d21;
+      --ink-2: #5a5f68;
+      --ink-3: #8b909a;
+      /* 品牌蓝（延续现有主色） */
+      --primary: #1a73e8;
+      --primary-hover: #155fba;
+      --primary-weak: #eef5ff;
+      --primary-line: #c4dcfa;
+      /* 语义色：仅限错误 / 状态点 */
+      --danger: #d92d20;
+      --danger-weak: #fef1f0;
+      --success: #12b76a;
+      /* 侧栏 */
+      --sidebar: #16181d;
+      --sidebar-ink: #9ba1ab;
+      --sidebar-line: #26282e;
+      /* 圆角 */
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+      /* 间距（4px 基准） */
+      --sp-1: 4px;
+      --sp-2: 8px;
+      --sp-3: 12px;
+      --sp-4: 16px;
+      --sp-5: 20px;
+      --sp-6: 24px;
+      --sp-8: 32px;
+      --sp-10: 40px;
+      /* 阴影：克制，边框承担层级 */
+      --shadow-xs: 0 1px 2px rgba(16, 24, 40, .05);
+      --shadow-sm: 0 2px 6px rgba(16, 24, 40, .06);
+      --shadow-md: 0 12px 32px rgba(16, 24, 40, .12);
+      /* 字号 */
+      --text-display: 24px;
+      --text-title: 16px;
+      --text-body: 14px;
+      --text-caption: 12.5px;
+      --text-micro: 11.5px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      color: var(--ink);
+      background: var(--bg);
+      font-size: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+    }
+
+    /* ============ 提案页自身的外框 ============ */
+    .proposal-head {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 40px 40px 20px;
+    }
+
+    .proposal-head .tag {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      letter-spacing: 1.2px;
+      color: var(--primary);
+    }
+
+    .proposal-head h1 {
+      margin: 8px 0 6px;
+      font-size: 26px;
+      letter-spacing: -.03em;
+    }
+
+    .proposal-head p {
+      margin: 0;
+      color: var(--ink-2);
+      line-height: 1.8;
+      max-width: 720px;
+    }
+
+    .token-strip {
+      max-width: 1440px;
+      margin: 24px auto 0;
+      padding: 0 40px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .token-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 12px;
+      background: var(--surface);
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+
+    .token-chip i {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 1px solid rgba(16, 24, 40, .08);
+    }
+
+    .token-chip code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink);
+    }
+
+    .view-tabs {
+      max-width: 1440px;
+      margin: 28px auto 10px;
+      padding: 0 40px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .view-tab {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 16px;
+      background: var(--surface);
+      color: var(--ink-2);
+      font-weight: 500;
+      font-size: 13.5px;
+    }
+
+    .view-tab.active {
+      border-color: var(--ink);
+      color: var(--ink);
+      background: var(--surface);
+      font-weight: 600;
+    }
+
+    /* ============ 应用模拟框 ============ */
+    .frame-wrap {
+      max-width: 1440px;
+      margin: 10px auto 60px;
+      padding: 0 40px;
+    }
+
+    .app-frame {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      overflow: hidden;
+      height: 860px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* —— 侧栏 —— */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 16px 10px;
+      background: var(--sidebar);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 4px 10px 18px;
+      color: #fff;
+      font-weight: 600;
+      font-size: 14.5px;
+      letter-spacing: -.01em;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      place-items: center;
+      background: #26282e;
+      color: #8ec5ff;
+      font-size: 13px;
+    }
+
+    .nav-item {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-radius: var(--radius-md);
+      padding: 8px 10px;
+      color: var(--sidebar-ink);
+      background: transparent;
+      font-size: 13.5px;
+      font-weight: 500;
+      text-align: left;
+    }
+
+    .nav-item:hover {
+      color: #e7e9ec;
+      background: #1f2126;
+    }
+
+    .nav-item.active {
+      color: #fff;
+      background: #26282e;
+    }
+
+    .nav-item .ico {
+      width: 17px;
+      text-align: center;
+      font-style: normal;
+      opacity: .85;
+    }
+
+    .side-link {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      color: var(--sidebar-ink);
+      font-size: 12.5px;
+      text-decoration: none;
+    }
+
+    .side-link:hover {
+      color: #e7e9ec;
+    }
+
+    .sidebar-foot {
+      margin-top: auto;
+      border-top: 1px solid var(--sidebar-line);
+      padding: 12px 10px 2px;
+    }
+
+    .foot-user {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--sidebar-ink);
+      font-size: 12.5px;
+    }
+
+    .foot-user b {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      place-items: center;
+      background: #26282e;
+      color: #cfd3d9;
+      font-size: 11.5px;
+    }
+
+    /* —— 主区 —— */
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .topbar {
+      display: flex;
+      height: 52px;
+      flex: none;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding: 0 20px;
+    }
+
+    .proj-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 6px 12px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .proj-chip small {
+      color: var(--ink-3);
+      font-weight: 400;
+    }
+
+    .proj-chip .caret {
+      color: var(--ink-3);
+      font-size: 10px;
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .env-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--primary);
+      background: var(--primary-weak);
+      border: 1px solid var(--primary-line);
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+
+    .svc {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink-2);
+      font-size: 12px;
+    }
+
+    .svc i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .avatar {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      place-items: center;
+      background: var(--primary-weak);
+      color: var(--primary-hover);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    /* ============ 页面 A：档案助手（经典 AI 问答布局） ============ */
+    .chat-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 296px;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .chat-col {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .session-bar {
+      display: flex;
+      flex: none;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 24px;
+    }
+
+    .session-id {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+
+    .session-id b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .session-id code {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--ink-3);
+      background: var(--surface-2);
+      border-radius: 5px;
+      padding: 2px 7px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .session-bar .acts {
+      display: flex;
+      gap: 8px;
+    }
+
+    .ghost-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 6px 12px;
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+
+    .ghost-btn:hover {
+      border-color: var(--line-strong);
+      color: var(--ink);
+    }
+
+    .chat-scroll {
+      flex: 1;
+      overflow: auto;
+      padding: 28px 24px 12px;
+    }
+
+    .chat-col-inner {
+      max-width: 780px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .msg {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 86%;
+    }
+
+    .msg .who {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .msg .who .avatar-mini {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      place-items: center;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+    }
+
+    .msg .bubble {
+      border-radius: 10px;
+      padding: 11px 14px;
+      line-height: 1.75;
+      white-space: pre-wrap;
+    }
+
+    .msg.user .bubble {
+      background: var(--primary);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+      font-weight: 500;
+    }
+
+    .msg.assistant .bubble {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-bottom-left-radius: 4px;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .msg.assistant .who .avatar-mini {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .msg.user .who .avatar-mini {
+      background: var(--primary-weak);
+      color: var(--primary-hover);
+    }
+
+    /* 引用证据卡 */
+    .cites {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .cite {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 3px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .cite .file {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12.5px;
+      font-weight: 600;
+      overflow: hidden;
+    }
+
+    .cite .file .doc-ico {
+      color: var(--ink-3);
+      font-style: normal;
+      font-size: 12px;
+    }
+
+    .cite .loc {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--primary-hover);
+      background: var(--primary-weak);
+      border-radius: 5px;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+
+    .cite .excerpt {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    .cite .excerpt b {
+      color: var(--ink);
+      font-weight: 600;
+      background: #fdf3d8;
+    }
+
+    /* 拒答：中性呈现，不占用告警色 */
+    .msg.refused .bubble {
+      background: var(--surface-2);
+      border: 1px dashed var(--line-strong);
+      color: var(--ink-2);
+    }
+
+    .msg.refused .refuse-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-3);
+      font-family: var(--font-mono);
+      letter-spacing: .4px;
+    }
+
+    /* 底部输入区：悬浮居中，经典 AI 问答样式 */
+    .composer-wrap {
+      flex: none;
+      padding: 6px 24px 18px;
+    }
+
+    .composer {
+      max-width: 780px;
+      margin: 0 auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: 0 4px 16px rgba(16, 24, 40, .07);
+      padding: 12px 12px 9px;
+      transition: border-color .15s;
+    }
+
+    .composer:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, .10);
+    }
+
+    .composer textarea {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      max-height: 160px;
+      resize: none;
+      border: 0;
+      outline: none;
+      font: inherit;
+      line-height: 1.6;
+      color: var(--ink);
+    }
+
+    .composer textarea::placeholder {
+      color: var(--ink-3);
+    }
+
+    .composer-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 7px;
+    }
+
+    .composer-hint {
+      color: var(--ink-3);
+      font-size: 11.5px;
+    }
+
+    .composer-hint kbd {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 0 5px;
+      background: var(--surface-2);
+    }
+
+    .send-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      border-radius: var(--radius-md);
+      padding: 8px 15px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .send-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    /* 右侧工具栏（1440 宽时停靠，窄屏收进抽屉） */
+    .tool-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-left: 1px solid var(--line);
+      padding: 16px 14px;
+      background: var(--bg);
+      min-width: 0;
+      overflow: auto;
+    }
+
+    .rail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .rail-head b {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .rail-head small {
+      font-family: var(--font-mono);
+      color: var(--ink-3);
+      font-size: 11px;
+    }
+
+    .tool-row {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      padding: 11px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tool-row .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .tool-row .top b {
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    .pill {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+
+    .pill.ok {
+      color: #067647;
+      background: #e6f6ef;
+    }
+
+    .tool-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .tool-meta span {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink-2);
+      background: var(--surface-2);
+      border-radius: 5px;
+      padding: 3px 7px;
+    }
+
+    .rail-note {
+      color: var(--ink-3);
+      font-size: 11.5px;
+      line-height: 1.7;
+    }
+
+    /* ============ 页面 B：带证据问答 ============ */
+    .qa-shell {
+      flex: 1;
+      overflow: auto;
+      padding: 36px 24px;
+    }
+
+    .qa-col {
+      max-width: 820px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .qa-heading h1 {
+      margin: 0 0 4px;
+      font-size: var(--text-display);
+      letter-spacing: -.02em;
+    }
+
+    .qa-heading p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: 13.5px;
+    }
+
+    .qa-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow-xs);
+      overflow: hidden;
+    }
+
+    .qa-tabs {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 12px;
+    }
+
+    .qa-tab {
+      border: 0;
+      background: none;
+      padding: 13px 14px;
+      color: var(--ink-3);
+      font-size: 13px;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+
+    .qa-tab:hover {
+      color: var(--ink-2);
+    }
+
+    .qa-tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--ink);
+    }
+
+    .qa-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px;
+    }
+
+    .qa-panel>label {
+      display: block;
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: -6px;
+    }
+
+    .qa-panel textarea {
+      display: block;
+      width: 100%;
+      min-height: 76px;
+      resize: vertical;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      padding: 11px 12px;
+      font: inherit;
+      outline: none;
+      color: var(--ink);
+    }
+
+    .qa-panel textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, .10);
+    }
+
+    .ask-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+    }
+
+    .answer-block {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 18px;
+    }
+
+    .answer-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: .5px;
+      color: var(--ink-3);
+    }
+
+    .answer-tag .dot {
+      background: var(--success);
+    }
+
+    .answer-block .answer-text {
+      margin: 10px 0 0;
+      line-height: 1.85;
+      white-space: pre-wrap;
+    }
+
+    .diag-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .diag-form input {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      padding: 9px 11px;
+      font: inherit;
+      color: var(--ink);
+      outline: none;
+      background: var(--surface);
+    }
+
+    .diag-form input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, .10);
+    }
+
+    .diag-form label {
+      display: grid;
+      gap: 5px;
+      color: var(--ink-2);
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .diag-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-3);
+      margin: 0 0 2px;
+    }
+
+    .diag-note {
+      margin: 2px 0 0;
+      color: var(--ink-3);
+      font-size: 11.5px;
+      line-height: 1.7;
+    }
+
+    .score-line {
+      margin: 6px 0 0;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink-3);
+    }
+
+    /* 响应示意 */
+    @media (max-width: 1100px) {
+      .app-frame {
+        grid-template-columns: 200px minmax(0, 1fr);
+        height: auto;
+        min-height: 720px;
+      }
+
+      .chat-shell {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .tool-rail {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="proposal-head">
+    <span class="tag">UI PROPOSAL · V1</span>
+    <h1>智慧档案工作台 · 工程工具风改版预览</h1>
+    <p>参考 Linear / Vercel 的克制感：边框承担层级、阴影降到最低、标题缩小让位于内容；延续现有蓝色主色，中性灰建立灰阶层级，红色仅用于错误。档案助手页改为经典 AI 问答布局（居中对话列 + 底部悬浮输入 +
+      工具记录侧栏）。</p>
+  </header>
+
+  <div class="token-strip">
+    <div class="token-chip"><i style="background:#f9f9fa"></i><code>--bg #F9F9FA</code></div>
+    <div class="token-chip"><i style="background:#ffffff"></i><code>--surface #FFF</code></div>
+    <div class="token-chip"><i style="background:#e6e7ea"></i><code>--line</code></div>
+    <div class="token-chip"><i style="background:#1c1d21"></i><code>--ink</code></div>
+    <div class="token-chip"><i style="background:#5a5f68"></i><code>--ink-2</code></div>
+    <div class="token-chip"><i style="background:#1a73e8"></i><code>--primary</code></div>
+    <div class="token-chip"><i style="background:#d92d20"></i><code>--danger 仅错误</code></div>
+    <div class="token-chip"><i style="background:#16181d"></i><code>--sidebar</code></div>
+    <div class="token-chip">圆角 <code>6 / 8 / 10</code></div>
+    <div class="token-chip">间距 <code>4px 基准</code></div>
+    <div class="token-chip">字体 <code>Geist + Noto Sans SC · 等宽 Geist Mono</code></div>
+  </div>
+
+  <div class="view-tabs">
+    <button class="view-tab active" data-view="agent" onclick="show('agent', this)">档案助手 · AI 问答布局</button>
+    <button class="view-tab" data-view="qa" onclick="show('qa', this)">带证据问答 · 会话页</button>
+  </div>
+
+  <!-- ================= 应用模拟 ================= -->
+  <div class="frame-wrap">
+    <div class="app-frame">
+
+      <!-- 侧栏 -->
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">▱</span>智慧档案</div>
+        <button class="nav-item"><span class="ico">⌂</span>总览</button>
+        <button class="nav-item"><span class="ico">▤</span>项目与清单</button>
+        <button class="nav-item"><span class="ico">▧</span>文档处理</button>
+        <button class="nav-item"><span class="ico">▱</span>正式档案</button>
+        <button class="nav-item" id="nav-qa" style="display:none"><span class="ico">⌕</span>智能检索</button>
+        <button class="nav-item active" id="nav-agent"><span class="ico">◇</span>档案助手</button>
+        <button class="nav-item"><span class="ico">▦</span>审计日志</button>
+        <div class="sidebar-foot">
+          <button class="nav-item"><span class="ico">⚙</span>项目设置</button>
+          <a class="side-link" href="#"><span class="ico">?</span>实现边界</a>
+        </div>
+      </aside>
+
+      <!-- 主区 -->
+      <div class="main">
+        <div class="topbar">
+          <span class="proj-chip"><small>当前项目</small>滨江研发中心改造项目<span class="caret">▼</span></span>
+          <div class="top-right">
+            <span class="env-badge">DEMO CHECKLIST</span>
+            <span class="svc"><i></i>服务正常</span>
+            <span class="avatar">张</span>
+          </div>
+        </div>
+
+        <!-- ===== 页面 A：档案助手 ===== -->
+        <div id="view-agent" class="chat-shell">
+          <div class="chat-col">
+            <div class="session-bar">
+              <span class="session-id"><span class="dot"
+                  style="background:var(--success)"></span>项目档案助手<b>会话</b><code>#a3f2-9c1e</code></span>
+              <div class="acts">
+                <button class="ghost-btn">↻ 刷新历史</button>
+                <button class="ghost-btn">≣ 工具记录 <span
+                    style="font-family:var(--font-mono);font-size:10.5px;color:var(--ink-3)">3</span></button>
+              </div>
+            </div>
+
+            <div class="chat-scroll">
+              <div class="chat-col-inner">
+
+                <div class="msg assistant">
+                  <span class="who"><span class="avatar-mini">✦</span>档案助手</span>
+                  <div class="bubble">会话已建立。我可以回答当前项目正式档案范围内的问题：目录查询、原文依据、字段确认情况。无依据时我会明确拒答，不会编造内容。</div>
+                </div>
+
+                <div class="msg user">
+                  <span class="who">你<span class="avatar-mini">张</span></span>
+                  <div class="bubble">先列出当前项目的正式档案，再说明施工合同的签订日期。</div>
+                </div>
+
+                <div class="msg assistant">
+                  <span class="who"><span class="avatar-mini">✦</span>档案助手</span>
+                  <div class="bubble">当前项目共有 3 份正式档案：施工合同（2026-03-12）、施工组织设计 V1.0、会议纪要 2026-04-02。
+
+                    其中《施工合同》的签订日期为 2026 年 3 月 12 日，依据如下：</div>
+                  <div class="cites">
+                    <div class="cite">
+                      <span class="file"><i class="doc-ico">▣</i>滨江项目施工合同.pdf</span>
+                      <span class="loc">PDF 第 3 页</span>
+                      <p class="excerpt">"……本合同自 <b>2026 年 3 月 12 日</b> 起生效，双方签字盖章后正式履行……"</p>
+                    </div>
+                    <div class="cite">
+                      <span class="file"><i class="doc-ico">▣</i>合同签订审批单.docx</span>
+                      <span class="loc">DOCX 第 12 段</span>
+                      <p class="excerpt">"签订日期：<b>2026-03-12</b>；签订地点：杭州……"</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="msg user">
+                  <span class="who">你<span class="avatar-mini">张</span></span>
+                  <div class="bubble">那监理规划里对旁站频次是怎么要求的？</div>
+                </div>
+
+                <div class="msg assistant refused">
+                  <span class="who"><span class="avatar-mini">✦</span>档案助手</span>
+                  <div class="bubble"><span
+                      class="refuse-tag">REFUSED_NO_EVIDENCE</span><br />当前项目正式档案中没有找到与"旁站频次"相关的原文依据，无法回答。你可以先在"正式档案"页确认是否已上传并确认该文档。
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="composer-wrap">
+              <div class="composer">
+                <textarea placeholder="输入问题，例如：先列出当前项目正式档案，再说明合同签订日期。"></textarea>
+                <div class="composer-foot">
+                  <span class="composer-hint"><kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行 · 2000 字符以内</span>
+                  <button class="send-btn">发送 ➤</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 工具记录侧栏（≥1440 停靠；窄屏收进头部按钮抽屉） -->
+          <aside class="tool-rail">
+            <div class="rail-head"><b>脱敏工具记录</b><small>3 条</small></div>
+            <div class="tool-row">
+              <div class="top"><b>检索正式档案原文</b><span class="pill ok">COMPLETED</span></div>
+              <div class="tool-meta"><span>query_provided: 是</span><span>top_k: 8</span><span>耗时 1240 ms</span></div>
+            </div>
+            <div class="tool-row">
+              <div class="top"><b>读取正式档案目录</b><span class="pill ok">COMPLETED</span></div>
+              <div class="tool-meta"><span>page: 1</span><span>page_size: 10</span><span>result_count: 3</span></div>
+            </div>
+            <div class="tool-row">
+              <div class="top"><b>检索正式档案原文</b><span class="pill ok">COMPLETED</span></div>
+              <div class="tool-meta"><span>query_provided: 是</span><span>top_k: 8</span><span>耗时 980 ms</span></div>
+            </div>
+            <p class="rail-note">仅展示服务端返回的脱敏摘要：不含文档标识、分数与原文内容。1280 及以下宽度时收入"工具记录"按钮的抽屉中。</p>
+          </aside>
+        </div>
+
+        <!-- ===== 页面 B：带证据问答 ===== -->
+        <div id="view-qa" class="qa-shell" style="display:none">
+          <div class="qa-col">
+            <div class="qa-heading">
+              <h1>带证据问答</h1>
+              <p>问题只在当前项目的正式档案范围内回答；引用与拒答状态均来自服务端。</p>
+            </div>
+
+            <div class="qa-card">
+              <div class="qa-tabs" role="tablist">
+                <button class="qa-tab active" id="qatab-ask" onclick="showQa('ask')">向正式档案提问</button>
+                <button class="qa-tab" id="qatab-diag" onclick="showQa('diag')">检索诊断</button>
+              </div>
+
+              <!-- 页签 1：提问 + 回答（默认展示） -->
+              <div id="qa-panel-ask" class="qa-panel">
+                <label>向正式档案提问</label>
+                <textarea placeholder="例如：合同签订日期是什么？">监理规划中旁站的范围包括哪些分项工程？</textarea>
+                <div class="ask-foot">
+                  <span class="composer-hint">单轮问答 · 2000 字符以内</span>
+                  <button class="send-btn">提交问题 ➤</button>
+                </div>
+
+                <div class="answer-block">
+                  <span class="answer-tag"><span class="dot"></span>ANSWERED · 已依据正式证据回答</span>
+                  <p class="answer-text">监理规划中的旁站范围包括：桩基混凝土浇筑、地下防水施工、大体积混凝土浇筑三个分项工程。其中桩基混凝土浇筑要求全过程旁站，其余两项为关键工序旁站。</p>
+                  <div class="cites" style="margin-top:14px">
+                    <div class="cite">
+                      <span class="file"><i class="doc-ico">▣</i>监理规划V2.pdf</span>
+                      <span class="loc">PDF 第 18 页</span>
+                      <p class="excerpt">"旁站范围：<b>桩基混凝土浇筑、地下防水施工、大体积混凝土浇筑</b>；桩基部分实施全过程旁站……"</p>
+                      <p class="score-line">向量分数 0.812 · 重排分数 0.934</p>
+                    </div>
+                    <div class="cite">
+                      <span class="file"><i class="doc-ico">▣</i>监理规划V2.pdf</span>
+                      <span class="loc">PDF 第 19 页</span>
+                      <p class="excerpt">"……旁站人员应填写旁站记录表，并在当日整理归档。"</p>
+                      <p class="score-line">向量分数 0.754 · 重排分数 0.901</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 页签 2：检索诊断（需主动切换） -->
+              <div id="qa-panel-diag" class="qa-panel" style="display:none">
+                <div class="diag-form">
+                  <input value="旁站范围 分项工程" placeholder="输入需要查找的原文主题" />
+                  <label>Top-K（1–10）<input type="number" min="1" max="10" value="5" /></label>
+                  <button class="ghost-btn">检索原文</button>
+                </div>
+                <p class="diag-meta">请求 Top-K 5 · 返回 2 条</p>
+                <div class="cite">
+                  <span class="file"><i class="doc-ico">▣</i>监理规划V2.pdf</span>
+                  <span class="loc">PDF 第 18 页</span>
+                  <p class="excerpt">"旁站范围：桩基混凝土浇筑、地下防水施工、大体积混凝土浇筑……"</p>
+                  <p class="score-line">向量分数 0.812 · 重排分数 0.934</p>
+                </div>
+                <div class="cite">
+                  <span class="file"><i class="doc-ico">▣</i>施工组织设计.docx</span>
+                  <span class="loc">文本第 41 行</span>
+                  <p class="excerpt">"混凝土浇筑采用泵送工艺，浇筑过程需专人旁站并记录。"</p>
+                  <p class="score-line">向量分数 0.687 · 重排分数 0.845</p>
+                </div>
+                <p class="diag-note">分数仅供检索诊断，不作为前端证据充分性阈值。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function show(view, btn) {
+      document.getElementById('view-agent').style.display = view === 'agent' ? 'grid' : 'none'
+      document.getElementById('view-qa').style.display = view === 'qa' ? 'block' : 'none'
+      document.getElementById('nav-agent').classList.toggle('active', view === 'agent')
+      document.getElementById('nav-qa').classList.toggle('active', view === 'qa')
+      document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t === btn))
+    }
+
+    function showQa(tab) {
+      document.getElementById('qa-panel-ask').style.display = tab === 'ask' ? 'flex' : 'none'
+      document.getElementById('qa-panel-diag').style.display = tab === 'diag' ? 'flex' : 'none'
+      document.getElementById('qatab-ask').classList.toggle('active', tab === 'ask')
+      document.getElementById('qatab-diag').classList.toggle('active', tab === 'diag')
+    }
+  </script>
+</body>
+
+</html>

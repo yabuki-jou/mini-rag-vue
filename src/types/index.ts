@@ -340,6 +340,55 @@ export interface ArchiveQuestionResponse {
   citations: ArchiveRetrievalItem[]
 }
 
+/** FR-042 项目档案助手公开会话；内部知识库、线程和 Agent 类型不向客户端暴露。 */
+export interface ArchiveAgentSession {
+  id: string
+  project_id: string
+  created_at: string
+  updated_at: string
+}
+
+/** FR-042 当前回答与历史共用的五字段脱敏引用。 */
+export interface ArchiveAgentCitation {
+  filename: string
+  location_type: EvidenceLocationType
+  location_start: number
+  location_end: number
+  excerpt: string
+}
+
+export interface ArchiveAgentMessageCreate {
+  message: string
+}
+
+export interface ArchiveAgentMessage {
+  role: 'USER' | 'ASSISTANT'
+  content: string
+  citations: ArchiveAgentCitation[]
+}
+
+export interface ArchiveAgentResponse {
+  session_id: string
+  answer_status: ArchiveAnswerStatus
+  answer: string
+  citations: ArchiveAgentCitation[]
+  request_id: string
+}
+
+/** FR-042 复用的脱敏工具调用日志；摘要不包含正文或服务端注入的身份范围。 */
+export interface ArchiveAgentToolCallLog {
+  id: string
+  tool_call_id: string
+  tool_name: string
+  status: 'COMPLETED' | 'FAILED'
+  arguments_summary: Record<string, unknown> | null
+  result_summary: Record<string, unknown> | null
+  duration_ms: number | null
+  error_code: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** 正式档案详情；字段和证据均来自独立详情接口。 */
 export interface ArchiveDetail extends ArchiveSummary {
   fields: ArchiveFieldDraft[]

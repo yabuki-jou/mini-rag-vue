@@ -166,9 +166,9 @@ function requestDelete(item: ChecklistItem) {
         </div>
         <span>v{{ item.version }}</span>
         <div class="row-actions">
-          <button class="link-button" data-testid="edit-checklist-item" @click="openEdit(item)">编辑</button>
+          <button class="secondary-button sm" data-testid="edit-checklist-item" @click="openEdit(item)">编辑</button>
           <button
-            class="link-button danger-link"
+            class="danger-button sm"
             data-testid="delete-checklist-item"
             :disabled="loading[`delete-checklist-item:${item.id}`]"
             @click="requestDelete(item)"

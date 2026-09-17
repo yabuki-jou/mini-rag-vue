@@ -60,6 +60,10 @@ const store = {
     auditOperationType: '',
     archiveAnswer: null,
     archiveRetrieval: null,
+    archiveAgentSession: null as null | { id: string; project_id: string; created_at: string; updated_at: string },
+    archiveAgentMessages: [],
+    archiveAgentLastResponse: null,
+    archiveAgentToolCalls: [],
     loading: {},
     error: '',
     errorStatus: null,
@@ -79,6 +83,10 @@ const store = {
     loadAuditPage: vi.fn(),
     askArchiveQuestion: vi.fn(),
     retrieveArchives: vi.fn(),
+    createArchiveAgentSession: vi.fn(),
+    sendArchiveAgentMessage: vi.fn(),
+    loadArchiveAgentMessages: vi.fn(),
+    loadArchiveAgentToolCalls: vi.fn(),
     loadArchiveDraft: vi.fn().mockResolvedValue(draft),
     createArchiveSuggestions: vi.fn().mockResolvedValue(draft),
     retryArchiveSuggestions: vi.fn(),
@@ -260,6 +268,49 @@ describe('ArchiveWorkspaceView FR-034/035 wiring', () => {
             expect(wrapper.find('[data-testid="archive-question-panel"]').exists()).toBe(true)
             expect(store.askArchiveQuestion).not.toHaveBeenCalled()
             expect(store.retrieveArchives).not.toHaveBeenCalled()
+        } finally {
+            wrapper.unmount()
+            route.name = previousRouteName
+        }
+    })
+
+    it('renders and wires the independent FR-042 archive agent route', async () => {
+        const previousRouteName = route.name
+        const previousSession = store.archiveAgentSession
+        route.name = 'archive-agent'
+        store.archiveAgentSession = { id: 'session-1', project_id: 'project-1', created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
+        const wrapper = mount(ArchiveWorkspaceView)
+
+        try {
+            expect(wrapper.find('[data-testid="archive-agent-panel"]').exists()).toBe(true)
+            await wrapper.get('[data-testid="archive-agent-create"]').trigger('click')
+            await wrapper.get('[data-testid="archive-agent-input"]').setValue('  列出当前正式档案  ')
+            await wrapper.get('[data-testid="archive-agent-send"]').trigger('click')
+            await wrapper.get('[data-testid="archive-agent-refresh-history"]').trigger('click')
+            await wrapper.get('[data-testid="archive-agent-refresh-tools"]').trigger('click')
+            expect(store.createArchiveAgentSession).toHaveBeenCalledOnce()
+            expect(store.sendArchiveAgentMessage).toHaveBeenCalledWith('列出当前正式档案')
+            expect(store.loadArchiveAgentMessages).toHaveBeenCalledOnce()
+            expect(store.loadArchiveAgentToolCalls).toHaveBeenCalledOnce()
+        } finally {
+            wrapper.unmount()
+            route.name = previousRouteName
+            store.archiveAgentSession = previousSession
+        }
+    })
+
+    it('navigates to the project archive agent without replacing FR-039', async () => {
+        const previousRouteName = route.name
+        route.name = 'documents'
+        router.push.mockClear()
+        const wrapper = mount(ArchiveWorkspaceView)
+
+        try {
+            const button = wrapper.findAll('button').find(item => item.text().includes('档案助手'))
+            expect(button).toBeTruthy()
+            await button!.trigger('click')
+            expect(router.push).toHaveBeenCalledWith('/projects/project-1/archive-agent')
+            expect(wrapper.find('[data-testid="archive-question-panel"]').exists()).toBe(false)
         } finally {
             wrapper.unmount()
             route.name = previousRouteName
