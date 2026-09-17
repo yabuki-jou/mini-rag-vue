@@ -724,6 +724,7 @@ onUnmounted(() => {
                         @regenerate="regenerateArchiveSuggestions"
                         @manual-draft="createManualArchiveDraft"
                         @save-field="saveArchiveField"
+                        @notify="(message: string, kind?: 'ok' | 'info') => store.notifySuccess(message, kind)"
                         @confirm="confirmArchiveDocument"
                         @cancel-confirmation="cancelArchiveDocumentConfirmation" />
                     <ChecklistLinkPanel

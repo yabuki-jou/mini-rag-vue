@@ -13,6 +13,7 @@ const emit = defineEmits<{
     regenerate: [expectedVersion: number]
     'manual-draft': []
     'save-field': [fieldName: ArchiveFieldName, payload: ArchiveFieldUpdate]
+    notify: [message: string, kind?: 'ok' | 'info']
     confirm: [expectedVersion: number]
     'cancel-confirmation': [expectedVersion: number]
 }>()
@@ -138,10 +139,12 @@ function addEvidence(fieldName: ArchiveFieldName) {
             normalized_anchor: null
         }
     ]
+    emit('notify', '已添加证据')
 }
 
 function removeEvidence(fieldName: ArchiveFieldName, index: number) {
     localEvidences[fieldName] = (localEvidences[fieldName] || []).filter((_evidence, evidenceIndex) => evidenceIndex !== index)
+    emit('notify', '已删除证据')
 }
 
 function toggleNoEvidence(fieldName: ArchiveFieldName, value: boolean) {
@@ -246,7 +249,7 @@ function locationText(field: ArchiveFieldDraft) {
                     <div v-for="(evidence, evidenceIndex) in localEvidences[fieldName]" :key="`${fieldName}-${evidenceIndex}`" class="evidence-row">
                         <div class="evidence-excerpt-row">
                             <textarea rows="2" :data-testid="`evidence-excerpt-${fieldName}-${evidenceIndex}`" :value="evidence.excerpt" placeholder="证据摘录（原文内容）" @input="setEvidenceValue(fieldName, evidenceIndex, 'excerpt', ($event.target as HTMLTextAreaElement).value)"></textarea>
-                            <button type="button" class="link-button evidence-remove" :data-testid="`evidence-remove-${fieldName}-${evidenceIndex}`" @click="removeEvidence(fieldName, evidenceIndex)">删除证据</button>
+                            <button type="button" class="danger-button sm evidence-remove" :data-testid="`evidence-remove-${fieldName}-${evidenceIndex}`" @click="removeEvidence(fieldName, evidenceIndex)">删除证据</button>
                         </div>
                         <div class="evidence-location-grid">
                             <label class="evidence-field">
@@ -275,7 +278,7 @@ function locationText(field: ArchiveFieldDraft) {
                                 @input="setEvidenceValue(fieldName, evidenceIndex, 'normalized_anchor', ($event.target as HTMLInputElement).value)" />
                         </label>
                     </div>
-                    <button type="button" class="link-button" :data-testid="`evidence-add-${fieldName}`" @click="addEvidence(fieldName)">添加证据</button>
+                    <button type="button" class="secondary-button sm" :data-testid="`evidence-add-${fieldName}`" @click="addEvidence(fieldName)">＋ 添加证据</button>
                 </div>
                 <div class="field-meta">
                     <span>{{ fieldByName(fieldName)?.source === 'AI' ? 'AI 建议' : fieldByName(fieldName)?.source === 'MANUAL' ? '人工填写' : '尚无来源' }}</span
@@ -287,7 +290,7 @@ function locationText(field: ArchiveFieldDraft) {
                         ?.evidences.map(evidence => evidence.excerpt)
                         .join('；')
                 }}</small>
-                <button v-if="canEdit()" class="link-button save-field" :data-testid="`save-field-${fieldName}`" :disabled="loading[`update-archive-field:${draft.document.id}:${fieldName}`]" @click="saveField(fieldByName(fieldName)!)">保存字段检查</button>
+                <button v-if="canEdit()" class="primary-button sm save-field" :data-testid="`save-field-${fieldName}`" :disabled="loading[`update-archive-field:${draft.document.id}:${fieldName}`]" @click="saveField(fieldByName(fieldName)!)">保存字段检查</button>
             </article>
         </div>
     </section>
@@ -296,32 +299,40 @@ function locationText(field: ArchiveFieldDraft) {
 <style scoped>
 .draft-panel {
     display: grid;
-    gap: 20px;
+    gap: 24px;
+    margin-top: 8px;
 }
 .draft-header {
     display: flex;
     justify-content: space-between;
-    gap: 18px;
-    align-items: start;
+    gap: 24px;
+    align-items: flex-start;
 }
 .draft-header h1 {
-    margin: 5px 0;
+    margin: 6px 0 5px;
+    font-size: 20px;
+    letter-spacing: -0.01em;
 }
 .draft-header p {
     margin: 0;
-    color: #64748b;
+    color: var(--ink-2);
+    font-size: 13px;
 }
 .draft-actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    row-gap: 8px;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-top: 20px;
 }
 .draft-notice {
     padding: 12px 16px;
-    border: 1px solid #bfdbfe;
-    border-radius: 10px;
-    background: #eff6ff;
-    color: #1e40af;
+    border: 1px solid var(--primary-line);
+    border-radius: var(--radius-md);
+    background: var(--primary-weak);
+    color: var(--primary-hover);
+    font-size: 13px;
 }
 .draft-fields {
     display: grid;

@@ -90,6 +90,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
         errorDetails: null as unknown,
         errorCode: '' as string,
         success: '' as string,
+        successKind: 'ok' as 'ok' | 'info',
         successTimer: null as ReturnType<typeof setTimeout> | null,
         confirmDialog: null as { title: string; message: string; danger: boolean; resolve: (ok: boolean) => void } | null
     }),
@@ -104,8 +105,9 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             this.errorDetails = null
             this.errorCode = ''
         },
-        notifySuccess(message: string) {
+        notifySuccess(message: string, kind: 'ok' | 'info' = 'ok') {
             this.success = message
+            this.successKind = kind
             if (this.successTimer) clearTimeout(this.successTimer)
             this.successTimer = setTimeout(() => {
                 this.success = ''
@@ -113,6 +115,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
         },
         clearSuccess() {
             this.success = ''
+            this.successKind = 'ok'
             if (this.successTimer) {
                 clearTimeout(this.successTimer)
                 this.successTimer = null
@@ -256,6 +259,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             if (!response || this.activeProjectId !== projectId) return undefined
             this.checklistItems = [...this.checklistItems, response.item]
             this.projects = this.projects.map(project => (project.id === projectId ? { ...project, version: response.project_version } : project))
+            this.notifySuccess('清单项已创建')
             return response.item
         },
         async updateChecklistItem(itemId: string, payload: ChecklistItemUpdate) {
@@ -264,6 +268,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             const item = await this.run(`update-checklist-item:${itemId}`, () => api.updateChecklistItem(projectId, itemId, payload))
             if (!item || this.activeProjectId !== projectId) return undefined
             this.checklistItems = this.checklistItems.map(current => (current.id === item.id ? item : current))
+            this.notifySuccess('清单项已保存')
             return item
         },
         async deleteChecklistItem(itemId: string) {
@@ -565,10 +570,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             try {
                 const response = await api.sendArchiveAgentMessage(projectId, sessionId, { message: normalizedMessage })
                 if (this.activeProjectId !== projectId || this.archiveAgentSession?.id !== sessionId || this.archiveAgentRequestId !== requestId) return undefined
-                this.archiveAgentMessages.push(
-                    { role: 'USER', content: normalizedMessage, citations: [] },
-                    { role: 'ASSISTANT', content: response.answer, citations: response.citations },
-                )
+                this.archiveAgentMessages.push({ role: 'USER', content: normalizedMessage, citations: [] }, { role: 'ASSISTANT', content: response.answer, citations: response.citations })
                 this.archiveAgentLastResponse = response
                 return response
             } catch (error) {
@@ -648,6 +650,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             if (!document || this.activeProjectId !== projectId) return undefined
             this.projectDocuments = [document, ...this.projectDocuments.filter(item => item.id !== document.id)]
             this.projects = this.projects.map(project => (project.id === projectId ? { ...project, active_document_count: project.active_document_count + 1 } : project))
+            this.notifySuccess('文档已上传')
             return document
         },
         async parseProjectDocument(documentId: string) {
@@ -656,6 +659,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             const document = await this.run(`parse-project-document:${documentId}`, () => api.parseProjectDocument(projectId, documentId))
             if (!document || this.activeProjectId !== projectId) return undefined
             this.projectDocuments = this.projectDocuments.map(item => (item.id === document.id ? document : item))
+            this.notifySuccess('已开始解析')
             return document
         },
         async retryProjectDocumentParse(documentId: string) {
@@ -664,6 +668,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             const document = await this.run(`retry-project-document-parse:${documentId}`, () => api.retryProjectDocumentParse(projectId, documentId))
             if (!document || this.activeProjectId !== projectId) return undefined
             this.projectDocuments = this.projectDocuments.map(item => (item.id === document.id ? document : item))
+            this.notifySuccess('已重试解析')
             return document
         },
         syncDraftResponse(projectId: string, documentId: string, draft: ArchiveDraft | undefined) {
@@ -684,7 +689,9 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             if (!this.isAuthenticated || !projectId) return undefined
             try {
                 const draft = await this.run(`create-archive-suggestions:${documentId}`, () => api.createArchiveSuggestions(projectId, documentId))
-                return this.syncDraftResponse(projectId, documentId, draft)
+                const synced = this.syncDraftResponse(projectId, documentId, draft)
+                if (synced) this.notifySuccess('已生成 AI 建议')
+                return synced
             } catch (error) {
                 // 首次生成失败可能已经持久化 SUGGESTION_FAILED；刷新真实文档和草稿后仍保留原错误提示。
                 const originalMessage = this.error
@@ -705,26 +712,34 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             const projectId = this.activeProjectId
             if (!this.isAuthenticated || !projectId) return undefined
             const draft = await this.run(`retry-archive-suggestions:${documentId}`, () => api.retryArchiveSuggestions(projectId, documentId))
-            return this.syncDraftResponse(projectId, documentId, draft)
+            const synced = this.syncDraftResponse(projectId, documentId, draft)
+            if (synced) this.notifySuccess('已重试 AI 建议')
+            return synced
         },
         async regenerateArchiveSuggestions(documentId: string, expectedVersion: number) {
             const projectId = this.activeProjectId
             if (!this.isAuthenticated || !projectId) return undefined
             const draft = await this.run(`regenerate-archive-suggestions:${documentId}`, () => api.regenerateArchiveSuggestions(projectId, documentId, { expected_version: expectedVersion }))
-            return this.syncDraftResponse(projectId, documentId, draft)
+            const synced = this.syncDraftResponse(projectId, documentId, draft)
+            if (synced) this.notifySuccess('已重新生成 AI 建议')
+            return synced
         },
         async createManualArchiveDraft(documentId: string) {
             const projectId = this.activeProjectId
             if (!this.isAuthenticated || !projectId) return undefined
             const draft = await this.run(`create-manual-archive-draft:${documentId}`, () => api.createManualArchiveDraft(projectId, documentId))
-            return this.syncDraftResponse(projectId, documentId, draft)
+            const synced = this.syncDraftResponse(projectId, documentId, draft)
+            if (synced) this.notifySuccess('已启动人工草稿')
+            return synced
         },
         async loadArchiveDraft(documentId: string) {
             const projectId = this.activeProjectId
             if (!this.isAuthenticated || !projectId) return undefined
             if (this.currentDraft?.document.id !== documentId) this.clearChecklistLinkState()
             const draft = await this.run(`load-archive-draft:${documentId}`, () => api.getArchiveDraft(projectId, documentId))
-            return this.syncDraftResponse(projectId, documentId, draft)
+            const synced = this.syncDraftResponse(projectId, documentId, draft)
+            if (synced) this.notifySuccess('已打开字段草稿', 'info')
+            return synced
         },
         clearChecklistLinkState() {
             this.checklistLinkSuggestions = []
@@ -759,6 +774,7 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             const link = await this.run(`create-checklist-link:${documentId}:${payload.checklist_item_id}`, () => api.createChecklistLink(projectId, documentId, payload))
             if (!link || this.activeProjectId !== projectId || this.currentDraft?.document.id !== documentId) return undefined
             await this.refreshChecklistLinkState(projectId, documentId)
+            this.notifySuccess('关联已确认')
             return link
         },
         async deleteChecklistLink(documentId: string, linkId: string) {
@@ -767,12 +783,15 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             await this.run(`delete-checklist-link:${linkId}`, () => api.deleteChecklistLink(projectId, documentId, linkId))
             if (this.activeProjectId !== projectId || this.currentDraft?.document.id !== documentId) return undefined
             await this.refreshChecklistLinkState(projectId, documentId)
+            this.notifySuccess('关联已删除')
         },
         async updateArchiveField(documentId: string, fieldName: ArchiveFieldName, payload: ArchiveFieldUpdate) {
             const projectId = this.activeProjectId
             if (!this.isAuthenticated || !projectId) return undefined
             const draft = await this.run(`update-archive-field:${documentId}:${fieldName}`, () => api.updateArchiveField(projectId, documentId, fieldName, payload))
-            return this.syncDraftResponse(projectId, documentId, draft)
+            const synced = this.syncDraftResponse(projectId, documentId, draft)
+            if (synced) this.notifySuccess('字段检查已保存')
+            return synced
         },
         async confirmArchiveDocument(documentId: string, expectedVersion: number) {
             const projectId = this.activeProjectId
