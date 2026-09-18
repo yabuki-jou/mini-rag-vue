@@ -4,6 +4,16 @@ import { ApiError, api, clearApiTokens, setApiTokens } from './api'
 describe('API client', () => {
   beforeEach(() => { clearApiTokens(); localStorage.clear(); vi.restoreAllMocks() })
 
+  it('does not expose retired generic knowledge-base, document, retrieval, or chat methods', () => {
+    const retiredMethods = [
+      'listKnowledgeBases', 'createKnowledgeBase',
+      'listDocuments', 'uploadDocument', 'parseDocument', 'deleteDocument',
+      'retrieve', 'listSessions', 'createSession', 'listMessages', 'sendMessage',
+    ] as const
+
+    for (const method of retiredMethods) expect(method in api).toBe(false)
+  })
+
   it('reads the signed-in profile through the protected current-user endpoint', async () => {
     setApiTokens({ access_token: 'profile-access-token', refresh_token: 'refresh-token' })
     const profile = {
@@ -21,8 +31,8 @@ describe('API client', () => {
   })
   it('attaches a Bearer Access Token and never sends the retired UUID header', async () => {
     setApiTokens({ access_token: 'access-token', refresh_token: 'refresh-token' })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))
-    await api.listKnowledgeBases()
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id: 'user-1' }), { status: 200 }))
+    await api.currentUser()
     const headers = fetchMock.mock.calls[0][1]?.headers as Headers
     expect(headers.get('Authorization')).toBe('Bearer access-token')
     expect(headers.get('X-User-ID')).toBeNull()
@@ -30,8 +40,8 @@ describe('API client', () => {
   })
 
   it('converts the unified backend error', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: { code: 'KB_FORBIDDEN', message: '无权访问' } }), { status: 403 }))
-    await expect(api.listKnowledgeBases()).rejects.toMatchObject({ code: 'KB_FORBIDDEN', message: '无权访问', status: 403 } satisfies Partial<ApiError>)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: { code: 'PROJECT_FORBIDDEN', message: '无权访问' } }), { status: 403 }))
+    await expect(api.currentUser()).rejects.toMatchObject({ code: 'PROJECT_FORBIDDEN', message: '无权访问', status: 403 } satisfies Partial<ApiError>)
   })
 
   it('uses the FR-030 project endpoint and sends the real create payload', async () => {
@@ -368,9 +378,9 @@ describe('API client', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'renewed-access-token', token_type: 'bearer', access_expires_in: 1800 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
 
-    await api.listKnowledgeBases()
+    await api.currentUser()
 
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/knowledge-bases', '/api/auth/refresh', '/api/knowledge-bases'])
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/me', '/api/auth/refresh', '/api/auth/me'])
     expect((fetchMock.mock.calls[2][1]?.headers as Headers).get('Authorization')).toBe('Bearer renewed-access-token')
   })
 

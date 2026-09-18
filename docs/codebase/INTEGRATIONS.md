@@ -4,9 +4,9 @@
 
 | 系统 | 类型 | 作用 | 身份方式 | 关键性 | 证据 |
 |---|---|---|---|---|---|
-| FastAPI 后端 | HTTP JSON / multipart API | 认证、项目 CRUD、智慧档案 FR-031～FR-041 与旧知识库 API | 公共认证接口除外均为 Bearer | 高 | src/services/api.ts、相邻后端 `docs/api-design.md` |
+| FastAPI 后端 | HTTP JSON / multipart API | 认证、项目 CRUD 与智慧档案 FR-031～FR-042 | 公共认证接口除外均为 Bearer | 高 | src/services/api.ts、相邻后端 `docs/api-design.md` |
 | Vite 开发代理 | 本地反向代理 | 将 /api 转发至 127.0.0.1:8000 | 不适用 | 高 | vite.config.ts |
-| 浏览器 localStorage | 客户端存储 | Token、用户名、选中项目、旧 UI 状态 | 同源存储 | 中 | api.ts、stores/ |
+| 浏览器 localStorage | 客户端存储 | Token、用户名、选中项目 | 同源存储 | 中 | api.ts、stores/ |
 
 前端不直接连接数据库、向量库、消息队列或 LLM；只应访问 FastAPI。
 
@@ -33,7 +33,7 @@
 | api.parseProjectDocument | POST /projects/:id/documents/:documentId/parse | 首次解析；文档处理页调用 |
 | api.retryProjectDocumentParse | POST /projects/:id/documents/:documentId/parse-retry | 失败后的专用重试；文档处理页调用 |
 
-api.ts 还保留 /knowledge-bases、旧 documents、retrieval-test 和 chat-sessions 调用；只被未注册的 WorkspaceView.vue 与 workspace.ts 引用，不是智慧档案项目级入口。
+旧知识库、普通文档、检索和 Chat API 方法已按 DEC-022 下线，不再由 `api.ts` 暴露。当前 API 客户端仅保留认证、健康检查和智慧档案项目级调用。
 
 ## 3. 后端已实现但前端未接入
 

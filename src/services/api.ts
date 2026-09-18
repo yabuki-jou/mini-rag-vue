@@ -36,11 +36,6 @@ import type {
   ChecklistLinkSuggestionList,
   ProcessDocument,
   ProcessDocumentPage,
-  ChatMessage,
-  ChatSession,
-  DocumentRecord,
-  KnowledgeBase,
-  RetrievalResponse,
   User,
 } from '../types'
 
@@ -54,7 +49,6 @@ const refreshTokenKey = 'archive-v1-refresh-token'
 
 let accessToken = localStorage.getItem(accessTokenKey) || ''
 let refreshToken = localStorage.getItem(refreshTokenKey) || ''
-let legacySessionScope = ''
 
 /** 将令牌保存在本地学习工作台；不保存密码或 UUID 作为鉴权依据。 */
 export function setApiTokens(tokens: Pick<AuthTokenPair, 'access_token' | 'refresh_token'>) {
@@ -80,9 +74,6 @@ export function clearApiTokens() {
 
 export const hasRefreshToken = () => Boolean(refreshToken)
 
-/** 仅用于未路由旧视图的浏览器缓存分区，不参与 HTTP 身份认证。 */
-export const setLegacySessionScope = (value: string) => { legacySessionScope = value }
-
 async function request<T>(path: string, init: RequestInit = {}, authenticated = true, retryAfterRefresh = true): Promise<T> {
   const headers = new Headers(init.headers)
   if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
@@ -101,13 +92,6 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
-
-type HandwriteDocument = Omit<DocumentRecord, 'original_name' | 'suffix'> & { filename: string }
-type HandwriteSession = { id: string; user_id: string; kb_id: string; created_at: string; updated_at: string }
-const sessionKey = (kbId: string) => `mini-rag-handwrite-sessions:${legacySessionScope}:${kbId}`
-const readLocalSessions = (kbId: string): ChatSession[] => JSON.parse(localStorage.getItem(sessionKey(kbId)) || '[]')
-const saveLocalSessions = (kbId: string, sessions: ChatSession[]) => localStorage.setItem(sessionKey(kbId), JSON.stringify(sessions))
-const normalizeDocument = (doc: HandwriteDocument): DocumentRecord => ({ ...doc, original_name: doc.filename, suffix: `.${doc.filename.split('.').pop() || ''}` })
 
 async function refreshSession(): Promise<AuthAccessToken> {
   const result = await request<AuthAccessToken>(
@@ -211,20 +195,4 @@ export const api = {
   confirmArchiveDocument: (projectId: string, documentId: string, payload: ArchiveConfirmationRequest) => request<ProcessDocument>(`/projects/${projectId}/documents/${documentId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),
   /** FR-036：携带当前版本取消正式入档；后端负责清理正式索引。 */
   cancelArchiveDocumentConfirmation: (projectId: string, documentId: string, payload: ArchiveConfirmationRequest) => request<ProcessDocument>(`/projects/${projectId}/documents/${documentId}/cancel-confirmation`, { method: 'POST', body: JSON.stringify(payload) }),
-  listKnowledgeBases: () => request<KnowledgeBase[]>('/knowledge-bases'),
-  createKnowledgeBase: (name: string) => request<KnowledgeBase>('/knowledge-bases', { method: 'POST', body: JSON.stringify({ name }) }),
-  listDocuments: (kbId: string) => request<HandwriteDocument[]>(`/knowledge-bases/${kbId}/documents`).then((rows) => rows.map(normalizeDocument)),
-  uploadDocument: (kbId: string, file: File) => { const data = new FormData(); data.append('upload', file); return request<HandwriteDocument>(`/knowledge-bases/${kbId}/documents`, { method: 'POST', body: data }).then(normalizeDocument) },
-  parseDocument: (kbId: string, id: string) => request(`/knowledge-bases/${kbId}/documents/${id}/parse`, { method: 'POST' }),
-  deleteDocument: (kbId: string, id: string) => request(`/knowledge-bases/${kbId}/documents/${id}`, { method: 'DELETE' }),
-  retrieve: (kbId: string, question: string) => request<RetrievalResponse>(`/knowledge-bases/${kbId}/retrieval-test`, { method: 'POST', body: JSON.stringify({ question }) }),
-  listSessions: async (kbId: string) => readLocalSessions(kbId).sort((a, b) => (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)),
-  createSession: async (kbId: string, title: string) => {
-    const row = await request<HandwriteSession>('/chat-sessions', { method: 'POST', body: JSON.stringify({ kb_id: kbId }) })
-    const session: ChatSession = { id: row.id, owner_id: row.user_id, kb_id: row.kb_id, title, created_at: row.created_at, updated_at: row.updated_at }
-    saveLocalSessions(kbId, [session, ...readLocalSessions(kbId).filter((item) => item.id !== session.id)])
-    return session
-  },
-  listMessages: (id: string) => request<Array<Omit<ChatMessage, 'rejected'>>>(`/chat-sessions/${id}/messages`).then((rows) => rows.map((row) => ({ ...row, rejected: false }))),
-  sendMessage: (id: string, question: string) => request<{ answer: string; rejected: boolean; sources: ChatMessage['sources'] }>(`/chat-sessions/${id}/messages`, { method: 'POST', body: JSON.stringify({ question }) }),
 }
