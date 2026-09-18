@@ -8,6 +8,15 @@ const session = {
 }
 
 describe('ArchiveAgentPanel', () => {
+  it('disables new session actions while the latest session is restoring', () => {
+    const wrapper = mount(ArchiveAgentPanel, {
+      props: { session: null, messages: [], lastResponse: null, toolCalls: [], loading: { 'archive-agent-restore': true } },
+    })
+
+    expect(wrapper.get('[data-testid="archive-agent-create"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('正在恢复…')
+  })
+
   it('starts only an explicit new session and does not expose its internal scope', async () => {
     const wrapper = mount(ArchiveAgentPanel, {
       props: { session: null, messages: [], lastResponse: null, toolCalls: [], loading: {} },

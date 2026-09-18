@@ -203,6 +203,14 @@ async function createArchiveAgentSession() {
     }
 }
 
+async function restoreLatestArchiveAgentSession() {
+    try {
+        await store.restoreLatestArchiveAgentSession()
+    } catch {
+        // 最近会话恢复失败时保留 Store 的稳定错误，用户仍可显式新建会话重试。
+    }
+}
+
 async function sendArchiveAgentMessage(message: string) {
     try {
         await store.sendArchiveAgentMessage(message)
@@ -482,13 +490,14 @@ watch(
 )
 
 watch(
-    [activeView, () => store.activeProjectId],
-    ([view, projectId]) => {
-        if (view === 'checklist' && projectId && store.isAuthenticated) loadChecklistItems()
-        if ((view === 'documents' || view === 'overview') && projectId && store.isAuthenticated) loadProjectDocuments()
-        if (view === 'archives' && projectId && store.isAuthenticated) loadArchives()
-        if (view === 'audit' && projectId && store.isAuthenticated) loadAuditLogs()
-        if (view === 'documents' && projectId && store.isAuthenticated) loadChecklistItems()
+    [activeView, () => store.activeProjectId, () => store.isAuthenticated],
+    ([view, projectId, isAuthenticated]) => {
+        if (view === 'checklist' && projectId && isAuthenticated) loadChecklistItems()
+        if ((view === 'documents' || view === 'overview') && projectId && isAuthenticated) loadProjectDocuments()
+        if (view === 'archives' && projectId && isAuthenticated) loadArchives()
+        if (view === 'audit' && projectId && isAuthenticated) loadAuditLogs()
+        if (view === 'documents' && projectId && isAuthenticated) loadChecklistItems()
+        if (view === 'agent' && projectId && isAuthenticated) restoreLatestArchiveAgentSession()
     },
     { immediate: true }
 )

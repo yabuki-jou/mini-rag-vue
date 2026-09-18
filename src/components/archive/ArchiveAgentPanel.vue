@@ -83,8 +83,8 @@ function formatValue(value: unknown) {
       <span class="agent-empty-icon">◇</span>
       <strong>尚未创建档案助手会话</strong>
       <p>选择当前项目后点击“新建会话”。会话范围由服务端绑定，页面不会提交知识库或用户标识。</p>
-      <button data-testid="archive-agent-create" class="primary-button" :disabled="loading['archive-agent-session'] || loading['archive-agent-message']" @click="emit('create-session')">
-        {{ loading['archive-agent-session'] ? '正在创建…' : '新建会话' }}
+      <button data-testid="archive-agent-create" class="primary-button" :disabled="loading['archive-agent-restore'] || loading['archive-agent-session'] || loading['archive-agent-message']" @click="emit('create-session')">
+        {{ loading['archive-agent-restore'] ? '正在恢复…' : loading['archive-agent-session'] ? '正在创建…' : '新建会话' }}
       </button>
     </div>
 
@@ -93,8 +93,8 @@ function formatValue(value: unknown) {
         <header class="agent-session-bar">
           <span class="agent-session-title"><i class="agent-dot" :class="lastResponse && lastResponse.answer_status !== 'ANSWERED' ? 'warn' : 'ok'"></i>项目档案助手</span>
           <div class="agent-session-acts">
-            <button data-testid="archive-agent-create" class="ghost-button" :disabled="loading['archive-agent-session'] || loading['archive-agent-message']" @click="emit('create-session')">
-              {{ loading['archive-agent-session'] ? '正在创建…' : '＋ 新建会话' }}
+            <button data-testid="archive-agent-create" class="ghost-button" :disabled="loading['archive-agent-restore'] || loading['archive-agent-session'] || loading['archive-agent-message']" @click="emit('create-session')">
+              {{ loading['archive-agent-restore'] ? '正在恢复…' : loading['archive-agent-session'] ? '正在创建…' : '＋ 新建会话' }}
             </button>
             <button data-testid="archive-agent-refresh-history" class="ghost-button" :disabled="loading['archive-agent-history'] || loading['archive-agent-message']" @click="emit('refresh-history')">{{ loading['archive-agent-history'] ? '刷新中…' : '↻ 刷新历史' }}</button>
             <button data-testid="archive-agent-refresh-tools" class="ghost-button" :disabled="loading['archive-agent-tool-calls'] || loading['archive-agent-message']" @click="toggleTools">{{ loading['archive-agent-tool-calls'] ? '刷新中…' : '≣ 工具记录' }}</button>

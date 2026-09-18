@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { reactive } from 'vue'
 import ArchiveWorkspaceView from './ArchiveWorkspaceView.vue'
 
 const draft = {
@@ -34,7 +35,7 @@ const draft = {
     next_actions: ['确认字段']
 }
 
-const store = {
+const store = reactive({
     isAuthenticated: true,
     hasSession: true,
     username: 'demo',
@@ -84,6 +85,7 @@ const store = {
     askArchiveQuestion: vi.fn(),
     retrieveArchives: vi.fn(),
     createArchiveAgentSession: vi.fn(),
+    restoreLatestArchiveAgentSession: vi.fn(),
     sendArchiveAgentMessage: vi.fn(),
     loadArchiveAgentMessages: vi.fn(),
     loadArchiveAgentToolCalls: vi.fn(),
@@ -108,7 +110,7 @@ const store = {
     resolveConfirm: vi.fn(),
     success: '',
     confirmDialog: null
-}
+})
 store.activeProject = store.projects[0]
 
 const router = { push: vi.fn(), replace: vi.fn() }
@@ -122,6 +124,27 @@ vi.mock('vue-router', () => ({
 }))
 
 describe('ArchiveWorkspaceView FR-034/035 wiring', () => {
+    it('restores the latest agent session after authentication changes without changing project', async () => {
+        const previousAuthenticated = store.isAuthenticated
+        const previousRouteName = route.name
+        route.name = 'archive-agent'
+        store.isAuthenticated = false
+        store.restoreLatestArchiveAgentSession.mockClear()
+        const wrapper = mount(ArchiveWorkspaceView)
+
+        try {
+            expect(store.restoreLatestArchiveAgentSession).not.toHaveBeenCalled()
+            store.isAuthenticated = true
+            await flushPromises()
+
+            expect(store.restoreLatestArchiveAgentSession).toHaveBeenCalledOnce()
+        } finally {
+            wrapper.unmount()
+            store.isAuthenticated = previousAuthenticated
+            route.name = previousRouteName
+        }
+    })
+
     it('clears a stale project route after login loads another account projects', async () => {
         const previousAuthenticated = store.isAuthenticated
         const previousProjects = store.projects
@@ -278,11 +301,13 @@ describe('ArchiveWorkspaceView FR-034/035 wiring', () => {
         const previousRouteName = route.name
         const previousSession = store.archiveAgentSession
         route.name = 'archive-agent'
+        store.restoreLatestArchiveAgentSession.mockClear()
         store.archiveAgentSession = { id: 'session-1', project_id: 'project-1', created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
         const wrapper = mount(ArchiveWorkspaceView)
 
         try {
             expect(wrapper.find('[data-testid="archive-agent-panel"]').exists()).toBe(true)
+            expect(store.restoreLatestArchiveAgentSession).toHaveBeenCalledOnce()
             await wrapper.get('[data-testid="archive-agent-create"]').trigger('click')
             await wrapper.get('[data-testid="archive-agent-input"]').setValue('  列出当前正式档案  ')
             await wrapper.get('[data-testid="archive-agent-send"]').trigger('click')

@@ -465,29 +465,33 @@ describe('API client', () => {
     }]
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(history), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(toolCalls), { status: 200 }))
 
     await expect(api.createArchiveAgentSession('project-1')).resolves.toEqual(session)
+    await expect(api.getLatestArchiveAgentSession('project-1')).resolves.toEqual(session)
     await expect(api.sendArchiveAgentMessage('project-1', 'session-1', { message: '合同签订日期是什么？' })).resolves.toEqual(response)
     await expect(api.listArchiveAgentMessages('project-1', 'session-1')).resolves.toEqual(history)
     await expect(api.listArchiveAgentToolCalls('project-1', 'session-1')).resolves.toEqual(toolCalls)
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       '/api/projects/project-1/agent-sessions',
+      '/api/projects/project-1/agent-sessions/latest',
       '/api/projects/project-1/agent-sessions/session-1/messages',
       '/api/projects/project-1/agent-sessions/session-1/messages',
       '/api/projects/project-1/agent-sessions/session-1/tool-calls',
     ])
-    const [createInit, sendInit, historyInit, toolCallsInit] = fetchMock.mock.calls.map(([, init]) => init as RequestInit)
+    const [createInit, latestInit, sendInit, historyInit, toolCallsInit] = fetchMock.mock.calls.map(([, init]) => init as RequestInit)
     expect(createInit.method).toBe('POST')
     expect(createInit.body).toBe(JSON.stringify({}))
+    expect(latestInit.method).toBeUndefined()
     expect(sendInit.method).toBe('POST')
     expect(sendInit.body).toBe(JSON.stringify({ message: '合同签订日期是什么？' }))
     expect(historyInit.method).toBeUndefined()
     expect(toolCallsInit.method).toBeUndefined()
-    for (const init of [createInit, sendInit, historyInit, toolCallsInit]) {
+    for (const init of [createInit, latestInit, sendInit, historyInit, toolCallsInit]) {
       expect((init.headers as Headers).get('Authorization')).toBe('Bearer archive-agent-access-token')
       expect((init.headers as Headers).get('X-User-ID')).toBeNull()
     }

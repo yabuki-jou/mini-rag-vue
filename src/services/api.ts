@@ -169,6 +169,8 @@ export const api = {
   askArchiveQuestion: (projectId: string, payload: ArchiveQuestionRequest) => request<ArchiveQuestionResponse>(`/projects/${projectId}/archive-questions`, { method: 'POST', body: JSON.stringify(payload) }),
   /** FR-042：在当前项目服务端授权范围内创建独立档案助手会话。 */
   createArchiveAgentSession: (projectId: string) => request<ArchiveAgentSession>(`/projects/${projectId}/agent-sessions`, { method: 'POST', body: JSON.stringify({}) }),
+  /** FR-042：读取当前项目最近一次档案助手会话；没有会话时由后端返回 null。 */
+  getLatestArchiveAgentSession: (projectId: string) => request<ArchiveAgentSession | null>(`/projects/${projectId}/agent-sessions/latest`),
   /** FR-042：顺序发送当前会话的一条用户消息，不提交任何身份或知识库字段。 */
   sendArchiveAgentMessage: (projectId: string, sessionId: string, payload: ArchiveAgentMessageCreate) => request<ArchiveAgentResponse>(`/projects/${projectId}/agent-sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify(payload) }),
   /** FR-042：读取当前会话的完整可见轮次，不读取内部工具消息。 */

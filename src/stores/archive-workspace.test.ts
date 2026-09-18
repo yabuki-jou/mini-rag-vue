@@ -46,6 +46,7 @@ vi.mock('../services/api', async (original) => {
       retrieveArchives: vi.fn(),
       askArchiveQuestion: vi.fn(),
       createArchiveAgentSession: vi.fn(),
+      getLatestArchiveAgentSession: vi.fn(),
       sendArchiveAgentMessage: vi.fn(),
       listArchiveAgentMessages: vi.fn(),
       listArchiveAgentToolCalls: vi.fn(),
@@ -930,6 +931,69 @@ describe('archive workspace store', () => {
     expect(api.listArchiveAgentToolCalls).toHaveBeenCalledWith(project.id, session.id)
     expect(store.archiveAgentMessages).toEqual(messages)
     expect(store.archiveAgentToolCalls).toEqual(toolCalls)
+  })
+
+  it('restores the latest FR-042 session and loads history and redacted tools', async () => {
+    const session = { id: 'session-latest', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-18T00:00:00Z' }
+    const messages = [{ role: 'USER' as const, content: '恢复后的问题', citations: [] }]
+    const toolCalls = [{ id: 'log-latest', tool_call_id: 'call-latest', tool_name: 'list_formal_archives', status: 'COMPLETED' as const, arguments_summary: null, result_summary: { found: true, result_count: 1 }, duration_ms: 5, error_code: null, created_at: '2026-09-18T00:00:01Z', updated_at: '2026-09-18T00:00:01Z' }]
+    vi.mocked(api.getLatestArchiveAgentSession).mockResolvedValue(session)
+    vi.mocked(api.listArchiveAgentMessages).mockResolvedValue(messages)
+    vi.mocked(api.listArchiveAgentToolCalls).mockResolvedValue(toolCalls)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+
+    await expect(store.restoreLatestArchiveAgentSession()).resolves.toEqual(session)
+
+    expect(api.getLatestArchiveAgentSession).toHaveBeenCalledWith(project.id)
+    expect(api.listArchiveAgentMessages).toHaveBeenCalledWith(project.id, session.id)
+    expect(api.listArchiveAgentToolCalls).toHaveBeenCalledWith(project.id, session.id)
+    expect(store.archiveAgentSession).toEqual(session)
+    expect(store.archiveAgentMessages).toEqual(messages)
+    expect(store.archiveAgentToolCalls).toEqual(toolCalls)
+    expect(store.loading['archive-agent-restore']).toBe(false)
+  })
+
+  it('keeps an empty FR-042 state when the current project has no session', async () => {
+    vi.mocked(api.getLatestArchiveAgentSession).mockResolvedValue(null)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.archiveAgentSession = { id: 'stale-session', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-17T00:00:00Z' }
+
+    await expect(store.restoreLatestArchiveAgentSession()).resolves.toBeNull()
+
+    expect(store.archiveAgentSession).toBeNull()
+    expect(store.archiveAgentMessages).toEqual([])
+    expect(store.archiveAgentToolCalls).toEqual([])
+    expect(api.listArchiveAgentMessages).not.toHaveBeenCalled()
+    expect(api.listArchiveAgentToolCalls).not.toHaveBeenCalled()
+  })
+
+  it('blocks a new session during restore and ignores a late restore response after project switch', async () => {
+    let resolveLatest!: (value: { id: string; project_id: string; created_at: string; updated_at: string }) => void
+    vi.mocked(api.getLatestArchiveAgentSession).mockImplementationOnce(() => new Promise(resolve => { resolveLatest = resolve }))
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project, { ...project, id: 'project-2', name: '另一个项目' }]
+    store.activeProjectId = project.id
+
+    const pending = store.restoreLatestArchiveAgentSession()
+    expect(store.loading['archive-agent-restore']).toBe(true)
+    await expect(store.createArchiveAgentSession()).resolves.toBeUndefined()
+    expect(api.createArchiveAgentSession).not.toHaveBeenCalled()
+
+    store.selectProject('project-2')
+    resolveLatest({ id: 'late-session', project_id: project.id, created_at: '2026-09-17T00:00:00Z', updated_at: '2026-09-18T00:00:00Z' })
+    await expect(pending).resolves.toBeUndefined()
+
+    expect(store.archiveAgentSession).toBeNull()
+    expect(store.archiveAgentMessages).toEqual([])
+    expect(store.archiveAgentToolCalls).toEqual([])
+    expect(store.loading['archive-agent-restore']).toBe(false)
   })
 
   it('clears the FR-042 session on project switch and ignores its late response', async () => {
