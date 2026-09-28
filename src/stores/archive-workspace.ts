@@ -296,8 +296,16 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             let response: Awaited<ReturnType<typeof api.listProjectDocuments>> | undefined
             try {
                 response = await this.run(`project-documents:${requestId}`, () => {
-                    if (resolvedPage === 1 && resolvedPageSize === 20 && resolvedStatus === '') return api.listProjectDocuments(projectId)
-                    return api.listProjectDocuments(projectId, resolvedPage, resolvedPageSize, resolvedStatus)
+                    return (async () => {
+                        try {
+                            if (resolvedPage === 1 && resolvedPageSize === 20 && resolvedStatus === '') return await api.listProjectDocuments(projectId)
+                            return await api.listProjectDocuments(projectId, resolvedPage, resolvedPageSize, resolvedStatus)
+                        } catch (error) {
+                            // 过期项目或列表请求的异常不得进入全局错误状态，避免覆盖新项目提示。
+                            if (this.activeProjectId !== projectId || this.projectDocumentRequestId !== requestId) return undefined
+                            throw error
+                        }
+                    })()
                 })
                 if (response && this.projectDocumentRequestId === requestId) {
                     this.projectDocumentSuccessfulRequestId = requestId
@@ -678,9 +686,13 @@ export const useArchiveWorkspaceStore = defineStore('archive-workspace', {
             if (!this.isAuthenticated || !projectId) return undefined
             const document = await this.run('upload-project-document', () => api.uploadProjectDocument(projectId, file))
             if (!document || this.activeProjectId !== projectId) return undefined
-            this.projectDocuments = [document, ...this.projectDocuments.filter(item => item.id !== document.id)]
             this.projects = this.projects.map(project => (project.id === projectId ? { ...project, active_document_count: project.active_document_count + 1 } : project))
             this.notifySuccess('文档已上传')
+            try {
+                await this.loadProjectDocuments(projectId, this.projectDocumentPage, this.projectDocumentPageSize, this.projectDocumentStatus)
+            } catch {
+                // 上传已经成功；列表刷新错误由 loadProjectDocuments 写入 Store，保留上传成功结果。
+            }
             return document
         },
         async parseProjectDocument(documentId: string) {

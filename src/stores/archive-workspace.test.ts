@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import { ApiError, api, setApiTokens } from '../services/api'
 import type { ArchiveAuditPage, ArchiveDraft, ArchiveDetail, ArchivePage, ArchiveSummary, ProcessDocument } from '../types'
+import DocumentProcessingPanel from '../components/archive/DocumentProcessingPanel.vue'
 import { useArchiveWorkspaceStore } from './archive-workspace'
 
 vi.mock('../services/api', async (original) => {
@@ -591,9 +594,11 @@ describe('archive workspace store', () => {
     expect(store.currentArchive).toBeNull()
   })
 
-  it('adds the uploaded server document and increases the visible project count', async () => {
+  it('reloads the unfiltered document page from the server after upload', async () => {
     const file = new File(['虚构施工方案'], '施工方案.txt', { type: 'text/plain' })
+    const refreshedPage = { items: [{ ...uploadedDocument, id: 'server-document' }], page: 1, page_size: 20, total: 23 }
     vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+    vi.mocked(api.listProjectDocuments).mockResolvedValue(refreshedPage)
     const store = useArchiveWorkspaceStore()
     store.hasSession = true
     store.projects = [project]
@@ -602,8 +607,185 @@ describe('archive workspace store', () => {
     await store.uploadProjectDocument(file)
 
     expect(api.uploadProjectDocument).toHaveBeenCalledWith(project.id, file)
-    expect(store.projectDocuments).toEqual([uploadedDocument])
+    expect(api.listProjectDocuments).toHaveBeenCalledWith(project.id)
+    expect(store.projectDocuments).toEqual(refreshedPage.items)
+    expect(store.projectDocumentTotal).toBe(refreshedPage.total)
+    expect(store.projectDocumentPage).toBe(refreshedPage.page)
     expect(store.activeProject?.active_document_count).toBe(1)
+  })
+
+  it('keeps an uploaded document when it matches the active status filter', async () => {
+    const refreshedPage = { items: [uploadedDocument], page: 1, page_size: 20, total: 4 }
+    vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+    vi.mocked(api.listProjectDocuments).mockResolvedValue(refreshedPage)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.projectDocumentStatus = 'UPLOADED'
+
+    await store.uploadProjectDocument(new File(['资料'], '资料.txt'))
+
+    expect(api.listProjectDocuments).toHaveBeenCalledWith(project.id, 1, 20, 'UPLOADED')
+    expect(store.projectDocuments).toEqual(refreshedPage.items)
+    expect(store.projectDocumentTotal).toBe(4)
+  })
+
+  it('keeps the server filtered page when the uploaded document does not match the active status filter', async () => {
+    const confirmedDocument = { ...uploadedDocument, id: 'confirmed-document', status: 'CONFIRMED' as const }
+    const refreshedPage = { items: [confirmedDocument], page: 1, page_size: 20, total: 6 }
+    vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+    vi.mocked(api.listProjectDocuments).mockResolvedValue(refreshedPage)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.projectDocumentStatus = 'CONFIRMED'
+
+    await store.uploadProjectDocument(new File(['资料'], '资料.txt'))
+
+    expect(api.listProjectDocuments).toHaveBeenCalledWith(project.id, 1, 20, 'CONFIRMED')
+    expect(store.projectDocuments).toEqual(refreshedPage.items)
+    expect(store.projectDocuments).not.toContainEqual(uploadedDocument)
+    expect(store.projectDocumentTotal).toBe(6)
+  })
+
+  it('reloads the current non-first page and trusts its returned total', async () => {
+    const refreshedPage = { items: [{ ...uploadedDocument, id: 'page-document' }], page: 3, page_size: 5, total: 18 }
+    vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+    vi.mocked(api.listProjectDocuments).mockResolvedValue(refreshedPage)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.projectDocumentPage = 3
+    store.projectDocumentPageSize = 5
+    store.projectDocumentTotal = 12
+
+    await store.uploadProjectDocument(new File(['资料'], '资料.txt'))
+
+    expect(api.listProjectDocuments).toHaveBeenCalledWith(project.id, 3, 5, '')
+    expect(store.projectDocuments).toEqual(refreshedPage.items)
+    expect(store.projectDocumentTotal).toBe(18)
+    expect(store.projectDocumentTotal).not.toBe(store.projectDocuments.length)
+    expect(store.projectDocumentPage).toBe(3)
+  })
+
+  it('keeps upload failure separate and does not reload the document page', async () => {
+    const error = new ApiError('UPLOAD_FAILED', '上传失败。', 400)
+    vi.mocked(api.uploadProjectDocument).mockRejectedValue(error)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.projectDocuments = [uploadedDocument]
+    store.projectDocumentTotal = 1
+
+    await expect(store.uploadProjectDocument(new File(['资料'], '资料.txt'))).rejects.toBe(error)
+
+    expect(api.listProjectDocuments).not.toHaveBeenCalled()
+    expect(store.projectDocuments).toEqual([uploadedDocument])
+    expect(store.projectDocumentTotal).toBe(1)
+    expect(store.activeProject?.active_document_count).toBe(0)
+    expect(store.error).toBe('上传失败。')
+  })
+
+  it('returns upload success and preserves the refresh error when reloading fails', async () => {
+    const refreshError = new ApiError('LIST_FAILED', '列表刷新失败。', 503)
+    vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+    vi.mocked(api.listProjectDocuments).mockRejectedValue(refreshError)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.projectDocuments = [{ ...uploadedDocument, id: 'existing-document' }]
+    store.projectDocumentTotal = 5
+
+    await expect(store.uploadProjectDocument(new File(['资料'], '资料.txt'))).resolves.toEqual(uploadedDocument)
+
+    expect(store.activeProject?.active_document_count).toBe(1)
+    expect(store.projectDocuments).toEqual([{ ...uploadedDocument, id: 'existing-document' }])
+    expect(store.projectDocumentTotal).toBe(5)
+    expect(store.error).toBe('列表刷新失败。')
+    expect(store.errorStatus).toBe(503)
+    expect(store.success).toBe('文档已上传')
+  })
+
+  it('does not let a late upload-list response or error affect a newly selected project', async () => {
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project, { ...project, id: 'project-2', active_document_count: 8 }]
+    store.activeProjectId = project.id
+    vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+
+    let resolveRefresh!: (value: { items: ProcessDocument[]; page: number; page_size: number; total: number }) => void
+    vi.mocked(api.listProjectDocuments).mockImplementationOnce(() => new Promise(resolve => { resolveRefresh = resolve }))
+    const pendingSuccess = store.uploadProjectDocument(new File(['资料'], '资料.txt'))
+    await vi.waitFor(() => expect(api.listProjectDocuments).toHaveBeenCalledOnce())
+    store.selectProject('project-2')
+    const newProjectPage = { items: [{ ...uploadedDocument, id: 'project-2-document' }], page: 2, page_size: 5, total: 17 }
+    vi.mocked(api.listProjectDocuments).mockResolvedValueOnce(newProjectPage)
+    await store.loadProjectDocuments()
+    resolveRefresh({ items: [uploadedDocument], page: 2, page_size: 3, total: 99 })
+    await pendingSuccess
+
+    expect(store.projectDocuments).toEqual(newProjectPage.items)
+    expect(store.projectDocumentTotal).toBe(17)
+    expect(store.projectDocumentPage).toBe(2)
+
+    let rejectRefresh!: (reason: unknown) => void
+    vi.mocked(api.listProjectDocuments).mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectRefresh = reject }))
+    store.selectProject(project.id)
+    const pendingFailure = store.uploadProjectDocument(new File(['资料'], '资料.txt'))
+    await vi.waitFor(() => expect(api.listProjectDocuments).toHaveBeenCalledTimes(3))
+    store.selectProject('project-2')
+    const currentProjectError = new ApiError('NEW_PROJECT_LIST_FAILED', '新项目列表失败。', 503)
+    vi.mocked(api.listProjectDocuments).mockRejectedValueOnce(currentProjectError)
+    await expect(store.loadProjectDocuments()).rejects.toBe(currentProjectError)
+    rejectRefresh(new ApiError('STALE_LIST_FAILED', '旧项目列表失败。', 503))
+    await pendingFailure
+
+    expect(store.projectDocuments).toEqual([])
+    expect(store.projectDocumentTotal).toBe(0)
+    expect(store.projectDocumentPage).toBe(1)
+    expect(store.error).toBe('新项目列表失败。')
+    expect(store.errorStatus).toBe(503)
+  })
+
+  it('updates the document total displayed in the panel without a manual refresh', async () => {
+    const serverDocument = { ...uploadedDocument, id: 'server-document', filename: '服务端返回文件.txt' }
+    const refreshedPage = { items: [serverDocument], page: 1, page_size: 20, total: 13 }
+    vi.mocked(api.uploadProjectDocument).mockResolvedValue(uploadedDocument)
+    vi.mocked(api.listProjectDocuments).mockResolvedValue(refreshedPage)
+    const store = useArchiveWorkspaceStore()
+    store.hasSession = true
+    store.projects = [project]
+    store.activeProjectId = project.id
+    store.projectDocumentTotal = 12
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DocumentProcessingPanel, {
+          documents: store.projectDocuments,
+          loading: store.loading,
+          page: store.projectDocumentPage,
+          pageSize: store.projectDocumentPageSize,
+          total: store.projectDocumentTotal,
+          status: store.projectDocumentStatus,
+          onUpload: file => store.uploadProjectDocument(file)
+        })
+      }
+    }))
+    const file = new File(['资料'], '资料.txt')
+    const input = wrapper.get('[data-testid="project-document-file"]')
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await wrapper.get('[data-testid="upload-project-document"]').trigger('click')
+    await flushPromises()
+
+    expect(api.listProjectDocuments).toHaveBeenCalledOnce()
+    expect(wrapper.get('[data-testid="document-total"]').text()).toBe('13')
+    expect(wrapper.text()).toContain('服务端返回文件.txt')
+    wrapper.unmount()
   })
 
   it('replaces the processing record with the first-parse response', async () => {
